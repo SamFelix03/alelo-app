@@ -11,264 +11,284 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
+  Switch
 } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import { supabase } from "../../lib/supabase"
+import { useAuth } from "../../context/AuthContext"
+
+// Define types for our route params and navigation
+type RootStackParamList = {
+  SellerOnboarding: { phoneNumber: string };
+  SellerTabs: undefined;
+};
+
+type SellerOnboardingScreenRouteProp = RouteProp<RootStackParamList, 'SellerOnboarding'>;
+type SellerOnboardingScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SellerOnboarding'>;
+
+// Business hours type
+type BusinessHoursDay = {
+  open: string;
+  close: string;
+  isOpen: boolean;
+};
+
+type BusinessHours = {
+  [key: string]: BusinessHoursDay;
+  monday: BusinessHoursDay;
+  tuesday: BusinessHoursDay;
+  wednesday: BusinessHoursDay;
+  thursday: BusinessHoursDay;
+  friday: BusinessHoursDay;
+  saturday: BusinessHoursDay;
+  sunday: BusinessHoursDay;
+};
+
+// Location type
+type Location = {
+  latitude: number;
+  longitude: number;
+};
 
 const SellerOnboarding = () => {
-  const navigation = useNavigation()
-  const [step, setStep] = useState(1)
+  const navigation = useNavigation<SellerOnboardingScreenNavigationProp>()
+  const route = useRoute<SellerOnboardingScreenRouteProp>()
+  const { phoneNumber } = route.params
+  const { refreshUserProfile } = useAuth()
+
+  // State for seller fields that match database schema
   const [name, setName] = useState("")
+  const [location, setLocation] = useState<Location | null>(null)
   const [address, setAddress] = useState("")
-  const [profileImage, setProfileImage] = useState<string | null>(null)
-  const [businessLicense, setBusinessLicense] = useState<string | null>(null)
-  const [businessCategory, setBusinessCategory] = useState("")
-  const [openingTime, setOpeningTime] = useState("8:00 AM")
-  const [closingTime, setClosingTime] = useState("8:00 PM")
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [isOpen, setIsOpen] = useState(false)
+  const [businessHours, setBusinessHours] = useState<BusinessHours>({
+    monday: { open: "09:00", close: "17:00", isOpen: true },
+    tuesday: { open: "09:00", close: "17:00", isOpen: true },
+    wednesday: { open: "09:00", close: "17:00", isOpen: true },
+    thursday: { open: "09:00", close: "17:00", isOpen: true },
+    friday: { open: "09:00", close: "17:00", isOpen: true },
+    saturday: { open: "10:00", close: "15:00", isOpen: true },
+    sunday: { open: "10:00", close: "15:00", isOpen: false }
+  })
   const [loading, setLoading] = useState(false)
+
+  const handleLocationPicker = () => {
+    // In a real app, this would use location services
+    // For this example, we'll just set mock coordinates for San Francisco
+    setLocation({
+      latitude: 37.7749,
+      longitude: -122.4194
+    })
+    Alert.alert("Location Set", "Mock location has been set to San Francisco")
+  }
 
   const handleImagePicker = () => {
     // In a real app, this would use react-native-image-picker
     // For this example, we'll just set a placeholder
-    setProfileImage("https://via.placeholder.com/150")
+    setLogoUrl("https://via.placeholder.com/150")
   }
 
-  const handleLicensePicker = () => {
-    // In a real app, this would use react-native-document-picker
-    // For this example, we'll just set a placeholder
-    setBusinessLicense("business_license.pdf")
+  const updateBusinessHours = (day: string, field: keyof BusinessHoursDay, value: string | boolean) => {
+    setBusinessHours(prev => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        [field]: value
+      }
+    }))
   }
 
-  const handleNext = () => {
-    if (step < 4) {
-      setStep(step + 1)
-    } else {
-      handleFinish()
+  const handleComplete = async () => {
+    if (!name) {
+      Alert.alert("Error", "Please enter your business name")
+      return
     }
-  }
-
-  const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1)
-    } else {
-      navigation.goBack()
-    }
-  }
-
-  const handleFinish = () => {
+    
     setLoading(true)
-
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      // Convert location to PostGIS format if it exists
+      let locationGeoJSON = null
+      if (location) {
+        locationGeoJSON = `POINT(${location.longitude} ${location.latitude})`
+      }
+      
+      // Insert seller record
+      const { data, error } = await supabase
+        .from('sellers')
+        .insert([
+          {
+            phone_number: phoneNumber,
+            name: name,
+            current_location: locationGeoJSON,
+            logo_url: logoUrl,
+            address: address,
+            is_open: isOpen,
+            business_hours: businessHours
+          }
+        ])
+        
+      if (error) {
+        console.error('Error creating seller profile:', error)
+        Alert.alert("Error", "There was an error creating your business profile")
+        setLoading(false)
+        return
+      }
+      
       setLoading(false)
-      navigation.navigate("SellerTabs")
-    }, 1500)
-  }
-
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Add a Profile Picture</Text>
-            <Text style={styles.stepDescription}>Help customers recognize your business</Text>
-
-            <TouchableOpacity
-              style={styles.imagePickerContainer}
-              onPress={handleImagePicker}
-              accessibilityLabel="Upload profile picture"
-            >
-              {profileImage ? (
-                <Image
-                  source={{ uri: profileImage }}
-                  style={styles.profileImage}
-                  accessibilityLabel="Selected profile picture"
-                />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
-                  <Text style={styles.imagePlaceholderText}>Tap to upload</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, !profileImage && styles.buttonDisabled]}
-              onPress={handleNext}
-              disabled={!profileImage}
-              accessibilityLabel="Next button"
-            >
-              <Text style={styles.buttonText}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )
-
-      case 2:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Business Information</Text>
-            <Text style={styles.stepDescription}>Tell us about your business</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Business Name"
-              value={name}
-              onChangeText={setName}
-              maxLength={30}
-              accessibilityLabel="Business name input"
-            />
-
-            <View style={styles.categoryContainer}>
-              <Text style={styles.categoryLabel}>Business Category</Text>
-              <View style={styles.categoryButtons}>
-                {["Food", "Groceries", "Bakery", "Other"].map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[styles.categoryButton, businessCategory === category && styles.categoryButtonActive]}
-                    onPress={() => setBusinessCategory(category)}
-                    accessibilityLabel={`${category} category button`}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryButtonText,
-                        businessCategory === category && styles.categoryButtonTextActive,
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, (name.length < 2 || !businessCategory) && styles.buttonDisabled]}
-              onPress={handleNext}
-              disabled={name.length < 2 || !businessCategory}
-              accessibilityLabel="Next button"
-            >
-              <Text style={styles.buttonText}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )
-
-      case 3:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Business License</Text>
-            <Text style={styles.stepDescription}>Upload your business license or permit</Text>
-
-            <TouchableOpacity
-              style={styles.licensePickerContainer}
-              onPress={handleLicensePicker}
-              accessibilityLabel="Upload business license"
-            >
-              {businessLicense ? (
-                <View style={styles.licenseContainer}>
-                  <Ionicons name="document" size={40} color={theme.colors.primary} />
-                  <Text style={styles.licenseText}>{businessLicense}</Text>
-                </View>
-              ) : (
-                <View style={styles.licensePlaceholder}>
-                  <Ionicons name="cloud-upload" size={40} color={theme.colors.placeholder} />
-                  <Text style={styles.licensePlaceholderText}>Tap to upload license</Text>
-                  <Text style={styles.licensePlaceholderSubtext}>PDF or image</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, !businessLicense && styles.buttonDisabled]}
-              onPress={handleNext}
-              disabled={!businessLicense}
-              accessibilityLabel="Next button"
-            >
-              <Text style={styles.buttonText}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )
-
-      case 4:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Business Hours</Text>
-            <Text style={styles.stepDescription}>Set your default operating hours</Text>
-
-            <View style={styles.hoursContainer}>
-              <View style={styles.hourRow}>
-                <Text style={styles.hourLabel}>Opening Time</Text>
-                <TouchableOpacity style={styles.timeSelector} accessibilityLabel="Opening time selector">
-                  <Text style={styles.timeText}>{openingTime}</Text>
-                  <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.hourRow}>
-                <Text style={styles.hourLabel}>Closing Time</Text>
-                <TouchableOpacity style={styles.timeSelector} accessibilityLabel="Closing time selector">
-                  <Text style={styles.timeText}>{closingTime}</Text>
-                  <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.addressInputContainer}>
-              <Text style={styles.addressLabel}>Business Address</Text>
-              <View style={styles.addressSearchContainer}>
-                <Ionicons name="search" size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
-                <TextInput
-                  style={styles.addressInput}
-                  placeholder="Search for your business address"
-                  value={address}
-                  onChangeText={setAddress}
-                  accessibilityLabel="Address input"
-                />
-              </View>
-            </View>
-
-            <View style={styles.mapPreview}>
-              <Image
-                source={{ uri: "https://via.placeholder.com/400x200?text=Map+Preview" }}
-                style={styles.mapImage}
-                accessibilityLabel="Map preview"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, address.length < 5 && styles.buttonDisabled]}
-              onPress={handleFinish}
-              disabled={address.length < 5 || loading}
-              accessibilityLabel="Finish button"
-            >
-              {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Finish</Text>}
-            </TouchableOpacity>
-          </View>
-        )
-
-      default:
-        return null
+      
+      // Refresh the user profile in AuthContext to get the latest data
+      await refreshUserProfile();
+      
+      // The AuthNavigator will automatically redirect to SellerTabs
+      // No need to navigate manually
+      
+    } catch (error) {
+      console.error('Error creating seller profile:', error)
+      Alert.alert("Error", "There was an error creating your business profile")
+      setLoading(false)
     }
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={handleBack} accessibilityLabel="Back button">
-        <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-      </TouchableOpacity>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.progressContainer}>
-          {[1, 2, 3, 4].map((i) => (
-            <View
-              key={i}
-              style={[styles.progressDot, step >= i ? styles.progressDotActive : styles.progressDotInactive]}
-              accessibilityLabel={`Step ${i} ${step >= i ? "active" : "inactive"}`}
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()} 
+          accessibilityLabel="Back button"
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+      
+        <Text style={styles.title}>Set Up Your Business</Text>
+        <Text style={styles.subtitle}>Please provide the following information</Text>
+        
+        {/* Business Name Input - matches 'name' field */}
+        <Text style={styles.inputLabel}>Business Name</Text>
+        <TextInput
+          placeholder="Business Name"
+          value={name}
+          onChangeText={setName}
+          style={styles.input}
+          accessibilityLabel="Business name input"
+        />
+        
+        {/* Address Input - matches 'address' field */}
+        <Text style={styles.inputLabel}>Business Address</Text>
+        <TextInput
+          placeholder="Business Address"
+          value={address}
+          onChangeText={setAddress}
+          style={styles.input}
+          multiline
+          accessibilityLabel="Address input"
+        />
+        
+        {/* Location Picker - matches 'current_location' field */}
+        <Text style={styles.inputLabel}>Business Location</Text>
+        <TouchableOpacity 
+          style={styles.locationButton}
+          onPress={handleLocationPicker}
+          accessibilityLabel="Set location button"
+        >
+          <Ionicons name="location" size={20} color={theme.colors.primary} />
+          <Text style={styles.locationButtonText}>
+            {location ? "Location Selected (Tap to change)" : "Set Your Business Location"}
+          </Text>
+        </TouchableOpacity>
+        
+        {/* Logo Upload - matches 'logo_url' field */}
+        <Text style={styles.inputLabel}>Business Logo</Text>
+        <TouchableOpacity
+          style={styles.imagePickerContainer}
+          onPress={handleImagePicker}
+          accessibilityLabel="Upload business logo"
+        >
+          {logoUrl ? (
+            <Image
+              source={{ uri: logoUrl }}
+              style={styles.logoImage}
+              accessibilityLabel="Selected business logo"
             />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Ionicons name="image" size={40} color={theme.colors.placeholder} />
+              <Text style={styles.imagePlaceholderText}>Tap to upload logo</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        {/* Business Status - matches 'is_open' field */}
+        <Text style={styles.inputLabel}>Initial Business Status</Text>
+        <View style={styles.switchContainer}>
+          <Text style={styles.switchLabel}>Open for Business</Text>
+          <Switch
+            value={isOpen}
+            onValueChange={setIsOpen}
+            trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+            thumbColor={isOpen ? theme.colors.primary : "#F5F5F5"}
+            ios_backgroundColor="#D1D1D1"
+            accessibilityLabel="Business status toggle"
+          />
+        </View>
+        
+        {/* Business Hours - matches 'business_hours' field */}
+        <Text style={styles.inputLabel}>Business Hours</Text>
+        <View style={styles.businessHoursContainer}>
+          {Object.keys(businessHours).map(day => (
+            <View key={day} style={styles.dayRow}>
+              <View style={styles.dayInfo}>
+                <Text style={styles.dayName}>{day.charAt(0).toUpperCase() + day.slice(1)}</Text>
+                <Switch
+                  value={businessHours[day].isOpen}
+                  onValueChange={(value) => updateBusinessHours(day, 'isOpen', value)}
+                  trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+                  thumbColor={businessHours[day].isOpen ? theme.colors.primary : "#F5F5F5"}
+                  ios_backgroundColor="#D1D1D1"
+                  style={styles.daySwitch}
+                />
+              </View>
+              
+              {businessHours[day].isOpen && (
+                <View style={styles.hoursInputRow}>
+                  <TextInput
+                    style={styles.timeInput}
+                    value={businessHours[day].open}
+                    onChangeText={(text) => updateBusinessHours(day, 'open', text)}
+                    placeholder="09:00"
+                    accessibilityLabel={`${day} opening time`}
+                  />
+                  <Text style={styles.timeSeparator}>to</Text>
+                  <TextInput
+                    style={styles.timeInput}
+                    value={businessHours[day].close}
+                    onChangeText={(text) => updateBusinessHours(day, 'close', text)}
+                    placeholder="17:00"
+                    accessibilityLabel={`${day} closing time`}
+                  />
+                </View>
+              )}
+            </View>
           ))}
         </View>
-
-        {renderStep()}
+        
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleComplete}
+          disabled={loading || !name}
+          accessibilityLabel="Complete registration button"
+        >
+          {loading ? 
+            <ActivityIndicator color="#FFFFFF" /> : 
+            <Text style={styles.buttonText}>Complete Registration</Text>
+          }
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   )
@@ -279,52 +299,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  backButton: {
-    padding: spacing.md,
-    marginTop: spacing.md,
-  },
   scrollContent: {
     flexGrow: 1,
     padding: spacing.lg,
   },
-  progressContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: spacing.xl,
+  backButton: {
+    padding: spacing.sm,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.lg,
   },
-  progressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginHorizontal: spacing.xs,
-  },
-  progressDotActive: {
-    backgroundColor: theme.colors.primary,
-  },
-  progressDotInactive: {
-    backgroundColor: theme.colors.disabled,
-  },
-  stepContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  stepTitle: {
-    fontSize: fontSize.xl,
+  title: {
+    fontSize: fontSize.xxl,
     fontWeight: "bold",
     marginBottom: spacing.sm,
     textAlign: "center",
   },
-  stepDescription: {
+  subtitle: {
     fontSize: fontSize.md,
     color: theme.colors.placeholder,
     marginBottom: spacing.xl,
     textAlign: "center",
   },
+  inputLabel: {
+    fontSize: fontSize.md,
+    fontWeight: "bold",
+    marginBottom: spacing.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: theme.colors.placeholder,
+    borderRadius: 8,
+    padding: spacing.md,
+    fontSize: fontSize.md,
+    marginBottom: spacing.lg,
+  },
   imagePickerContainer: {
     alignSelf: "center",
     marginBottom: spacing.xl,
   },
-  profileImage: {
+  logoImage: {
     width: 150,
     height: 150,
     borderRadius: 75,
@@ -338,156 +351,94 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: theme.colors.disabled,
-    borderStyle: "dashed",
   },
   imagePlaceholderText: {
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
     color: theme.colors.placeholder,
+    fontSize: fontSize.sm,
   },
-  input: {
+  locationButton: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: theme.colors.placeholder,
+    borderColor: theme.colors.primary,
     borderRadius: 8,
     padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  locationButtonText: {
+    marginLeft: spacing.sm,
+    color: theme.colors.primary,
     fontSize: fontSize.md,
-    marginBottom: spacing.xl,
   },
-  categoryContainer: {
-    marginBottom: spacing.xl,
-  },
-  categoryLabel: {
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-    marginBottom: spacing.sm,
-  },
-  categoryButtons: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  categoryButton: {
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  categoryButtonActive: {
-    backgroundColor: theme.colors.primary,
-  },
-  categoryButtonText: {
-    fontSize: fontSize.sm,
-  },
-  categoryButtonTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-  },
-  licensePickerContainer: {
-    alignSelf: "center",
-    marginBottom: spacing.xl,
-  },
-  licenseContainer: {
-    backgroundColor: "#F5F5F5",
-    padding: spacing.lg,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  licenseText: {
-    marginTop: spacing.sm,
-    color: theme.colors.text,
-    fontWeight: "bold",
-  },
-  licensePlaceholder: {
-    width: 250,
-    height: 150,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.disabled,
-    borderStyle: "dashed",
-    borderRadius: 8,
-  },
-  licensePlaceholderText: {
-    marginTop: spacing.xs,
-    color: theme.colors.placeholder,
-    fontWeight: "bold",
-  },
-  licensePlaceholderSubtext: {
-    color: theme.colors.placeholder,
-    fontSize: fontSize.sm,
-  },
-  hoursContainer: {
-    marginBottom: spacing.xl,
-  },
-  hourRow: {
+  switchContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  hourLabel: {
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-  },
-  timeSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
+    marginBottom: spacing.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    backgroundColor: "#F5F5F5",
     borderRadius: 8,
   },
-  timeText: {
+  switchLabel: {
     fontSize: fontSize.md,
-    marginRight: spacing.sm,
   },
-  addressInputContainer: {
-    marginBottom: spacing.lg,
-  },
-  addressLabel: {
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-    marginBottom: spacing.sm,
-  },
-  addressSearchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+  businessHoursContainer: {
     borderWidth: 1,
     borderColor: theme.colors.placeholder,
     borderRadius: 8,
+    marginBottom: spacing.xl,
+  },
+  dayRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.placeholder,
     padding: spacing.md,
   },
-  searchIcon: {
-    marginRight: spacing.sm,
+  dayInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  addressInput: {
-    flex: 1,
+  dayName: {
     fontSize: fontSize.md,
+    fontWeight: "bold",
   },
-  mapPreview: {
-    marginBottom: spacing.xl,
-    borderRadius: 8,
-    overflow: "hidden",
+  daySwitch: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
+  },
+  hoursInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.sm,
+  },
+  timeInput: {
+    flex: 1,
     borderWidth: 1,
-    borderColor: theme.colors.disabled,
+    borderColor: theme.colors.placeholder,
+    borderRadius: 4,
+    padding: spacing.sm,
+    fontSize: fontSize.sm,
+    textAlign: "center",
   },
-  mapImage: {
-    width: "100%",
-    height: 200,
+  timeSeparator: {
+    marginHorizontal: spacing.md,
+    color: theme.colors.placeholder,
   },
   button: {
     backgroundColor: theme.colors.primary,
     borderRadius: 8,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
     alignItems: "center",
+    justifyContent: "center",
+    marginVertical: spacing.lg,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
     color: "#FFFFFF",
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: "bold",
   },
 })

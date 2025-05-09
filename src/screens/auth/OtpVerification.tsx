@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   View,
   StyleSheet,
@@ -11,24 +11,98 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert
 } from "react-native"
-import { useNavigation, useRoute } from "@react-navigation/native"
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import { supabase } from "../../lib/supabase"
+import { storeUserData } from "../../lib/auth"
+import { useAuth } from "../../context/AuthContext"
+
+// Define types for our route params and navigation
+type RootStackParamList = {
+  OtpVerification: { 
+    role: "buyer" | "seller" | null, 
+    phoneNumber: string, 
+    existingUser?: boolean, 
+    existingUserType?: string 
+  };
+  BuyerOnboarding: { phoneNumber: string };
+  SellerOnboarding: { phoneNumber: string };
+  RoleSelection: undefined;
+};
+
+type OtpVerificationScreenRouteProp = RouteProp<RootStackParamList, 'OtpVerification'>;
+type OtpVerificationScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'OtpVerification'>;
 
 const OtpVerification = () => {
-  const navigation = useNavigation()
-  const route = useRoute()
-  const { role } = route.params as { role: "buyer" | "seller" }
+  const navigation = useNavigation<OtpVerificationScreenNavigationProp>()
+  const route = useRoute<OtpVerificationScreenRouteProp>()
+  const { role, phoneNumber: routePhoneNumber, existingUser, existingUserType } = route.params
+  const { refreshAuthState } = useAuth();
 
-  const [phoneNumber, setPhoneNumber] = useState("")
-  const [countryCode, setCountryCode] = useState("+1")
-  const [otpSent, setOtpSent] = useState(false)
+  const [phoneNumber, setPhoneNumber] = useState(routePhoneNumber || "")
+  const [countryCode, setCountryCode] = useState("+91")
+  const [otpSent, setOtpSent] = useState(!!routePhoneNumber)
   const [otp, setOtp] = useState(["", "", "", ""])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [selectedRole, setSelectedRole] = useState<"buyer" | "seller" | null>(role)
+  const [showRoleSelection, setShowRoleSelection] = useState(false)
 
-  const otpInputs = useRef<Array<TextInput | null>>([])
+  const otpInputs = useRef<Array<TextInput | null>>([null, null, null, null])
+
+  useEffect(() => {
+    // If phoneNumber is passed from route, automatically trigger OTP send
+    if (routePhoneNumber && !otpSent) {
+      setOtpSent(true);
+    }
+  }, [routePhoneNumber]);
+
+  // Function to create user in database
+  const createUser = async (phoneNumber: string, userType: string) => {
+    try {
+      // Check if user already exists
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone_number', phoneNumber)
+        .single();
+      
+      // If user exists, just store the session data
+      if (existingUser) {
+        await storeUserData(phoneNumber, userType);
+        return true;
+      }
+      
+      // Insert into users table if new user
+      const { data, error } = await supabase
+        .from('users')
+        .insert([
+          { 
+            phone_number: phoneNumber,
+            user_type: userType,
+            is_verified: true,
+          }
+        ]);
+        
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+      
+      // Store phone number for future use
+      await storeUserData(phoneNumber, userType);
+      return true;
+      
+    } catch (error) {
+      console.error('Error creating user:', error);
+      Alert.alert("Error", "Failed to create user account");
+      return false;
+    }
+  };
 
   const handleSendOtp = () => {
     if (phoneNumber.length < 10) {
@@ -39,11 +113,11 @@ const OtpVerification = () => {
     setLoading(true)
     setError("")
 
-    // Simulate OTP sending
+    // Simulate OTP sending - no actual SMS is sent
     setTimeout(() => {
       setLoading(false)
       setOtpSent(true)
-    }, 1500)
+    }, 1000)
   }
 
   const handleOtpChange = (text: string, index: number) => {
@@ -57,7 +131,7 @@ const OtpVerification = () => {
     }
   }
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     const enteredOtp = otp.join("")
     if (enteredOtp.length !== 4) {
       setError("Please enter a valid OTP")
@@ -67,27 +141,71 @@ const OtpVerification = () => {
     setLoading(true)
     setError("")
 
-    // Simulate OTP verification
-    setTimeout(() => {
+    // Mock verification - all 4-digit codes are accepted
+    setTimeout(async () => {
       setLoading(false)
-
-      // Navigate to appropriate onboarding screen based on role
-      if (role === "buyer") {
-        navigation.navigate("BuyerOnboarding")
+      
+      if (existingUser && existingUserType) {
+        // If this is an existing user, store their credentials and they will be auto-redirected
+        const success = await storeUserData(phoneNumber, existingUserType);
+        if (!success) {
+          Alert.alert("Error", "Failed to authenticate. Please try again.");
+          return;
+        }
+        
+        // Force refresh auth state to trigger navigation
+        await refreshAuthState();
+        return;
+      } 
+      
+      // For new users, need to select role or continue with onboarding
+      if (selectedRole) {
+        // If role is selected, create/update user and proceed to onboarding
+        const success = await createUser(phoneNumber, selectedRole);
+        
+        if (success) {
+          // Navigate to appropriate onboarding screen based on role
+          if (selectedRole === "buyer") {
+            navigation.navigate("BuyerOnboarding", { phoneNumber });
+          } else {
+            navigation.navigate("SellerOnboarding", { phoneNumber });
+          }
+        }
       } else {
-        navigation.navigate("SellerOnboarding")
+        // If role is not selected, show role selection
+        setShowRoleSelection(true);
       }
-    }, 1500)
+    }, 1000)
+  }
+
+  const handleRoleSelection = (selectedRole: "buyer" | "seller") => {
+    setSelectedRole(selectedRole);
+    setLoading(true);
+    
+    // Create user with selected role and navigate
+    createUser(phoneNumber, selectedRole).then(success => {
+      setLoading(false);
+      if (success) {
+        if (selectedRole === "buyer") {
+          navigation.navigate("BuyerOnboarding", { phoneNumber });
+        } else {
+          navigation.navigate("SellerOnboarding", { phoneNumber });
+        }
+      }
+    }).catch(err => {
+      setLoading(false);
+      Alert.alert("Error", "Failed to create user account");
+    });
   }
 
   const handleResendOtp = () => {
     setOtp(["", "", "", ""])
     setLoading(true)
 
-    // Simulate OTP resending
+    // Simulate OTP resending - no actual SMS is sent
     setTimeout(() => {
       setLoading(false)
-    }, 1500)
+    }, 1000)
   }
 
   return (
@@ -101,81 +219,116 @@ const OtpVerification = () => {
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
         </TouchableOpacity>
 
-        <View style={styles.content}>
-          <Text style={styles.title}>Verify Your Phone</Text>
-          <Text style={styles.subtitle}>
-            {otpSent
-              ? `We've sent a verification code to ${countryCode} ${phoneNumber}`
-              : "Enter your phone number to receive a verification code"}
-          </Text>
+        {showRoleSelection ? (
+          <View style={styles.content}>
+            <Text style={styles.title}>Choose Your Role</Text>
+            <Text style={styles.subtitle}>How would you like to use StreetVend?</Text>
 
-          {!otpSent ? (
-            <>
-              <View style={styles.phoneInputContainer}>
-                <View style={styles.countryCodeContainer}>
-                  <Text style={styles.countryCode}>{countryCode}</Text>
-                </View>
-                <TextInput
-                  style={styles.phoneInput}
-                  placeholder="Phone Number"
-                  keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  maxLength={10}
-                  accessibilityLabel="Phone number input"
-                />
-              </View>
+            <TouchableOpacity
+              style={[styles.roleButton, styles.buyerButton]}
+              onPress={() => handleRoleSelection("buyer")}
+              disabled={loading}
+              accessibilityLabel="I'm a Buyer button"
+            >
+              <Text style={styles.roleText}>I'm a Buyer</Text>
+              <Text style={styles.roleDescription}>Find and purchase from local vendors</Text>
+            </TouchableOpacity>
 
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <TouchableOpacity
+              style={[styles.roleButton, styles.sellerButton]}
+              onPress={() => handleRoleSelection("seller")}
+              disabled={loading}
+              accessibilityLabel="I'm a Seller button"
+            >
+              <Text style={styles.roleText}>I'm a Seller</Text>
+              <Text style={styles.roleDescription}>Sell your products to nearby customers</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleSendOtp}
-                disabled={loading}
-                accessibilityLabel="Send OTP button"
-              >
-                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <View style={styles.otpContainer}>
-                {otp.map((digit, index) => (
+            {loading && <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />}
+          </View>
+        ) : (
+          <View style={styles.content}>
+            <Text style={styles.title}>Verify Your Phone</Text>
+            <Text style={styles.subtitle}>
+              {otpSent
+                ? `We've sent a verification code to ${phoneNumber}`
+                : "Enter your phone number to receive a verification code"}
+            </Text>
+
+            {!otpSent ? (
+              <>
+                <View style={styles.phoneInputContainer}>
+                  <View style={styles.countryCodeContainer}>
+                    <Text style={styles.countryCode}>{countryCode}</Text>
+                  </View>
                   <TextInput
-                    key={index}
-                    ref={(ref) => (otpInputs.current[index] = ref)}
-                    style={styles.otpInput}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    value={digit}
-                    onChangeText={(text) => handleOtpChange(text, index)}
-                    accessibilityLabel={`OTP digit ${index + 1}`}
+                    style={styles.phoneInput}
+                    placeholder="Phone Number"
+                    keyboardType="phone-pad"
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    maxLength={10}
+                    accessibilityLabel="Phone number input"
                   />
-                ))}
-              </View>
+                </View>
 
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-              <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleVerifyOtp}
-                disabled={loading}
-                accessibilityLabel="Verify OTP button"
-              >
-                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Verify</Text>}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={handleSendOtp}
+                  disabled={loading}
+                  accessibilityLabel="Send OTP button"
+                >
+                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Send OTP</Text>}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.otpContainer}>
+                  {otp.map((digit, index) => (
+                    <TextInput
+                      key={index}
+                      ref={(input) => {
+                        otpInputs.current[index] = input;
+                      }}
+                      style={styles.otpInput}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      value={digit}
+                      onChangeText={(text) => handleOtpChange(text, index)}
+                      accessibilityLabel={`OTP digit ${index + 1}`}
+                    />
+                  ))}
+                </View>
 
-              <TouchableOpacity
-                style={styles.resendButton}
-                onPress={handleResendOtp}
-                disabled={loading}
-                accessibilityLabel="Resend OTP button"
-              >
-                <Text style={styles.resendText}>Didn't receive code? Resend</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={handleVerifyOtp}
+                  disabled={loading}
+                  accessibilityLabel="Verify OTP button"
+                >
+                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Verify</Text>}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.resendButton}
+                  onPress={handleResendOtp}
+                  disabled={loading}
+                  accessibilityLabel="Resend OTP button"
+                >
+                  <Text style={styles.resendText}>Didn't receive code? Resend</Text>
+                </TouchableOpacity>
+                
+                <Text style={styles.mockHint}>
+                  For demo purposes, any 4-digit code will work
+                </Text>
+              </>
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
@@ -191,11 +344,10 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: spacing.md,
-    marginTop: spacing.md,
   },
   content: {
     flex: 1,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.xl,
     justifyContent: "center",
   },
   title: {
@@ -206,28 +358,27 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: theme.colors.placeholder,
-    marginBottom: spacing.xl,
     textAlign: "center",
+    marginBottom: spacing.xl,
+    color: theme.colors.placeholder,
   },
   phoneInputContainer: {
     flexDirection: "row",
-    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: theme.colors.placeholder,
+    borderColor: "#E0E0E0",
     borderRadius: 8,
-    overflow: "hidden",
+    marginBottom: spacing.md,
   },
   countryCodeContainer: {
-    backgroundColor: "#F5F5F5",
     paddingHorizontal: spacing.md,
-    justifyContent: "center",
+    paddingVertical: spacing.md,
     borderRightWidth: 1,
-    borderRightColor: theme.colors.placeholder,
+    borderRightColor: "#E0E0E0",
+    justifyContent: "center",
   },
   countryCode: {
     fontSize: fontSize.md,
-    fontWeight: "bold",
+    color: theme.colors.text,
   },
   phoneInput: {
     flex: 1,
@@ -243,39 +394,77 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderWidth: 1,
-    borderColor: theme.colors.placeholder,
+    borderColor: "#E0E0E0",
     borderRadius: 8,
+    fontSize: 24,
     textAlign: "center",
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
   },
   button: {
     backgroundColor: theme.colors.primary,
     borderRadius: 8,
     padding: spacing.md,
     alignItems: "center",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
     color: "#FFFFFF",
-    fontSize: fontSize.lg,
     fontWeight: "bold",
+    fontSize: fontSize.md,
   },
   resendButton: {
     alignItems: "center",
+    marginBottom: spacing.xl,
   },
   resendText: {
     color: theme.colors.primary,
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+  },
+  mockHint: {
+    textAlign: "center",
+    color: theme.colors.placeholder,
+    fontStyle: "italic",
+    fontSize: fontSize.sm,
   },
   errorText: {
-    color: theme.colors.error,
+    color: "#E53935",
     marginBottom: spacing.md,
-    textAlign: "center",
+    fontSize: fontSize.sm,
   },
+  roleButton: {
+    borderRadius: 12,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buyerButton: {
+    backgroundColor: "#E8F5E9",
+    borderColor: theme.colors.primary,
+    borderWidth: 1,
+  },
+  sellerButton: {
+    backgroundColor: "#FFF3E0",
+    borderColor: theme.colors.secondary,
+    borderWidth: 1,
+  },
+  roleText: {
+    fontSize: fontSize.xl,
+    fontWeight: "bold",
+    marginBottom: spacing.xs,
+  },
+  roleDescription: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+  },
+  loader: {
+    marginTop: spacing.xl,
+  }
 })
 
 export default OtpVerification

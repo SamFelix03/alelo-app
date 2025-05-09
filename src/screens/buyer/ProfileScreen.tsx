@@ -1,61 +1,122 @@
 "use client"
 
-import { useState } from "react"
-import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView } from "react-native"
+import { useState, useEffect } from "react"
+import { 
+  View, 
+  StyleSheet, 
+  Text, 
+  Image, 
+  TouchableOpacity, 
+  ScrollView, 
+  Switch, 
+  SafeAreaView, 
+  Alert,
+  TextInput,
+  Modal,
+  ActivityIndicator
+} from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import { signOut } from "../../lib/auth"
+import { useAuth } from "../../context/AuthContext"
+import { supabase } from "../../lib/supabase"
 
-// Mock data for liked sellers
-const MOCK_LIKED_SELLERS = [
-  {
-    id: "1",
-    name: "Fresh Veggies",
-    logo: "https://via.placeholder.com/50?text=FV",
-    distance: "0.5 km",
-  },
-  {
-    id: "2",
-    name: "Bakery on Wheels",
-    logo: "https://via.placeholder.com/50?text=BW",
-    distance: "1.2 km",
-  },
-  {
-    id: "3",
-    name: "Spice Market",
-    logo: "https://via.placeholder.com/50?text=SM",
-    distance: "2.0 km",
-  },
-]
+type NotificationSettings = {
+  orderUpdates: boolean;
+  promotions: boolean;
+  sellerAlerts: boolean;
+};
 
 const ProfileScreen = () => {
-  const navigation = useNavigation()
-  const [notifications, setNotifications] = useState({
+  const navigation = useNavigation();
+  const { userInfo, refreshUserProfile, refreshAuthState } = useAuth();
+  
+  // State for notifications
+  const [notifications, setNotifications] = useState<NotificationSettings>({
     orderUpdates: true,
     promotions: false,
     sellerAlerts: true,
-  })
+  });
+  
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadingLogout, setLoadingLogout] = useState(false);
+
+  // Load profile data when component mounts
+  useEffect(() => {
+    if (userInfo?.profileData) {
+      setEditName(userInfo.profileData.name || "");
+      setEditAddress(userInfo.profileData.address || "");
+    }
+  }, [userInfo?.profileData]);
 
   const handleEditProfile = () => {
-    // In a real app, this would navigate to an edit profile screen
-    console.log("Edit profile")
-  }
+    setIsEditing(true);
+  };
 
-  const handleChangeNumber = () => {
-    // In a real app, this would navigate to a change number screen
-    console.log("Change number")
-  }
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert("Error", "Name cannot be empty");
+      return;
+    }
 
-  const handleToggleNotification = (type) => {
+    setIsSaving(true);
+    try {
+      const tableName = userInfo?.userType === 'buyer' ? 'buyers' : 'sellers';
+      
+      const { error } = await supabase
+        .from(tableName)
+        .update({
+          name: editName,
+          address: editAddress
+        })
+        .eq('phone_number', userInfo?.phoneNumber);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Refresh user profile data
+      await refreshUserProfile();
+      setIsEditing(false);
+      Alert.alert("Success", "Profile updated successfully");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert("Error", "Failed to update profile. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleNotification = (type: keyof NotificationSettings) => {
     setNotifications({
       ...notifications,
       [type]: !notifications[type],
-    })
-  }
+    });
+  };
 
-  const navigateToSellerProfile = (seller) => {
-    navigation.navigate("SellerProfile", { seller })
-  }
+  const handleLogout = async () => {
+    setLoadingLogout(true);
+    try {
+      await signOut(navigation);
+      // Force a refresh of the auth context to ensure immediate UI update
+      await refreshAuthState();
+    } catch (error) {
+      console.error('Error logging out:', error);
+      Alert.alert('Error', 'Failed to log out. Please try again.');
+    } finally {
+      setLoadingLogout(false);
+    }
+  };
+
+  // Get profile image based on user type
+  const profileImage = userInfo?.userType === 'buyer' 
+    ? userInfo?.profileData?.profile_pic_url 
+    : userInfo?.profileData?.logo_url;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -67,14 +128,14 @@ const ProfileScreen = () => {
         <View style={styles.profileSection}>
           <View style={styles.profileInfo}>
             <Image
-              source={{ uri: "https://via.placeholder.com/100?text=User" }}
+              source={{ uri: profileImage || "https://via.placeholder.com/100?text=User" }}
               style={styles.profileImage}
               accessibilityLabel="Profile picture"
             />
 
             <View>
-              <Text style={styles.profileName}>John Doe</Text>
-              <Text style={styles.profileLocation}>San Francisco, CA</Text>
+              <Text style={styles.profileName}>{userInfo?.profileData?.name || "User"}</Text>
+              <Text style={styles.profileLocation}>{userInfo?.profileData?.address || "No address"}</Text>
             </View>
           </View>
 
@@ -89,112 +150,140 @@ const ProfileScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Liked Sellers</Text>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.likedSellersContainer}
-          >
-            {MOCK_LIKED_SELLERS.map((seller) => (
-              <TouchableOpacity
-                key={seller.id}
-                style={styles.likedSellerCard}
-                onPress={() => navigateToSellerProfile(seller)}
-                accessibilityLabel={`${seller.name} card`}
-              >
-                <Image
-                  source={{ uri: seller.logo }}
-                  style={styles.likedSellerLogo}
-                  accessibilityLabel={`${seller.name} logo`}
-                />
-                <Text style={styles.likedSellerName}>{seller.name}</Text>
-                <Text style={styles.likedSellerDistance}>{seller.distance}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security</Text>
-
-          <View style={styles.securityItem}>
-            <View>
-              <Text style={styles.securityLabel}>Phone Number</Text>
-              <Text style={styles.securityValue}>+1 *****1234</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.changeButton}
-              onPress={handleChangeNumber}
-              accessibilityLabel="Change number button"
-            >
-              <Text style={styles.changeButtonText}>Change</Text>
-            </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Account Information</Text>
+          <View style={styles.accountInfoItem}>
+            <Text style={styles.accountInfoLabel}>Phone Number</Text>
+            <Text style={styles.accountInfoValue}>{userInfo?.phoneNumber || ""}</Text>
+          </View>
+          <View style={styles.accountInfoItem}>
+            <Text style={styles.accountInfoLabel}>Account Type</Text>
+            <Text style={styles.accountInfoValue}>{userInfo?.userType === 'buyer' ? 'Customer' : 'Business'}</Text>
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notifications</Text>
 
-          <View style={styles.notificationItem}>
-            <View>
-              <Text style={styles.notificationLabel}>Order Updates</Text>
-              <Text style={styles.notificationDescription}>Get notified about your order status</Text>
-            </View>
-
-            <Switch
-              value={notifications.orderUpdates}
-              onValueChange={() => handleToggleNotification("orderUpdates")}
-              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-              thumbColor={notifications.orderUpdates ? theme.colors.primary : "#F5F5F5"}
-              accessibilityLabel="Toggle order updates"
-            />
-          </View>
-
-          <View style={styles.notificationItem}>
-            <View>
-              <Text style={styles.notificationLabel}>Promotions</Text>
-              <Text style={styles.notificationDescription}>Receive offers and discounts from sellers</Text>
-            </View>
-
-            <Switch
-              value={notifications.promotions}
-              onValueChange={() => handleToggleNotification("promotions")}
-              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-              thumbColor={notifications.promotions ? theme.colors.primary : "#F5F5F5"}
-              accessibilityLabel="Toggle promotions"
-            />
-          </View>
-
-          <View style={styles.notificationItem}>
-            <View>
-              <Text style={styles.notificationLabel}>Seller Availability Alerts</Text>
-              <Text style={styles.notificationDescription}>Get notified when your favorite sellers are nearby</Text>
-            </View>
-
-            <Switch
-              value={notifications.sellerAlerts}
-              onValueChange={() => handleToggleNotification("sellerAlerts")}
-              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-              thumbColor={notifications.sellerAlerts ? theme.colors.primary : "#F5F5F5"}
-              accessibilityLabel="Toggle seller alerts"
-            />
+          <View style={styles.settingsGroup}>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => handleToggleNotification("orderUpdates")}
+            >
+              <Text style={styles.settingText}>Order Updates</Text>
+              <Switch
+                value={notifications.orderUpdates}
+                onValueChange={() => handleToggleNotification("orderUpdates")}
+                trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+                thumbColor={notifications.orderUpdates ? theme.colors.primary : "#F5F5F5"}
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => handleToggleNotification("promotions")}
+            >
+              <Text style={styles.settingText}>Promotions & Deals</Text>
+              <Switch
+                value={notifications.promotions}
+                onValueChange={() => handleToggleNotification("promotions")}
+                trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+                thumbColor={notifications.promotions ? theme.colors.primary : "#F5F5F5"}
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => handleToggleNotification("sellerAlerts")}
+            >
+              <Text style={styles.settingText}>Seller Alerts</Text>
+              <Switch
+                value={notifications.sellerAlerts}
+                onValueChange={() => handleToggleNotification("sellerAlerts")}
+                trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+                thumbColor={notifications.sellerAlerts ? theme.colors.primary : "#F5F5F5"}
+              />
+            </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity style={styles.logoutButton} accessibilityLabel="Logout button">
-          <Ionicons name="log-out" size={20} color={theme.colors.error} />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+        
+        {/* Logout Button */}
+        <View style={styles.logoutContainer}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            disabled={loadingLogout}
+          >
+            {loadingLogout ? (
+              <ActivityIndicator size="small" color="#E53935" />
+            ) : (
+              <>
+                <Ionicons name="log-out-outline" size={20} color="#E53935" style={styles.logoutIcon} />
+                <Text style={styles.logoutText}>Logout</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.versionContainer}>
           <Text style={styles.versionText}>Version 1.0.0</Text>
         </View>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={isEditing}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsEditing(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            
+            <Text style={styles.inputLabel}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Enter your name"
+            />
+            
+            <Text style={styles.inputLabel}>Address</Text>
+            <TextInput
+              style={[styles.input, styles.addressInput]}
+              value={editAddress}
+              onChangeText={setEditAddress}
+              placeholder="Enter your address"
+              multiline
+            />
+            
+            <View style={styles.modalButtonsContainer}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setIsEditing(false)}
+                disabled={isSaving}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.saveButton, isSaving && styles.disabledButton]} 
+                onPress={handleSaveProfile}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -260,83 +349,52 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: spacing.md,
   },
-  likedSellersContainer: {
-    paddingBottom: spacing.sm,
+  accountInfoItem: {
+    marginBottom: spacing.md,
   },
-  likedSellerCard: {
-    alignItems: "center",
-    marginRight: spacing.lg,
-    width: 80,
-  },
-  likedSellerLogo: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginBottom: spacing.sm,
-  },
-  likedSellerName: {
-    fontSize: fontSize.sm,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 2,
-  },
-  likedSellerDistance: {
-    fontSize: fontSize.xs,
-    color: theme.colors.placeholder,
-  },
-  securityItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  securityLabel: {
+  accountInfoLabel: {
     fontSize: fontSize.md,
     fontWeight: "bold",
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  securityValue: {
-    fontSize: fontSize.sm,
-    color: theme.colors.placeholder,
+  accountInfoValue: {
+    fontSize: fontSize.md,
+    color: theme.colors.text,
   },
-  changeButton: {
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
+  settingsGroup: {
+    marginBottom: spacing.lg,
   },
-  changeButtonText: {
-    color: theme.colors.primary,
-    fontWeight: "bold",
-  },
-  notificationItem: {
+  settingItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.md,
   },
-  notificationLabel: {
+  settingText: {
     fontSize: fontSize.md,
     fontWeight: "bold",
-    marginBottom: 2,
   },
-  notificationDescription: {
-    fontSize: fontSize.sm,
-    color: theme.colors.placeholder,
-    maxWidth: 250,
+  logoutContainer: {
+    padding: spacing.lg,
+    alignItems: "center",
   },
   logoutButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    padding: spacing.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E53935",
+    width: "80%",
+  },
+  logoutIcon: {
+    marginRight: spacing.sm,
   },
   logoutText: {
-    color: theme.colors.error,
+    color: "#E53935",
     fontWeight: "bold",
     fontSize: fontSize.md,
-    marginLeft: spacing.sm,
   },
   versionContainer: {
     padding: spacing.lg,
@@ -346,6 +404,76 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: theme.colors.placeholder,
   },
-})
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: spacing.lg,
+    width: "85%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: "bold",
+    marginBottom: spacing.lg,
+    textAlign: "center",
+  },
+  inputLabel: {
+    fontSize: fontSize.md,
+    fontWeight: "bold",
+    marginBottom: spacing.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: spacing.md,
+    fontSize: fontSize.md,
+    marginBottom: spacing.lg,
+  },
+  addressInput: {
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  modalButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modalButton: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#F5F5F5",
+    marginRight: spacing.md,
+  },
+  saveButton: {
+    backgroundColor: theme.colors.primary,
+  },
+  cancelButtonText: {
+    color: theme.colors.text,
+    fontWeight: "bold",
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+});
 
-export default ProfileScreen
+export default ProfileScreen;

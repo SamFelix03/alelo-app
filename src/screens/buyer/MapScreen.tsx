@@ -3,13 +3,35 @@
 import { useState, useRef } from "react"
 import { View, StyleSheet, Text, TouchableOpacity, Animated, Dimensions, Image, Platform } from "react-native"
 import { useNavigation } from "@react-navigation/native"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
 import Slider from "@react-native-community/slider"
 
+// Type definitions for the navigation and data
+type RootStackParamList = {
+  SearchScreen: undefined;
+  SellerProfile: { seller: Seller };
+};
+
+type MapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Types for the data models
+type Seller = {
+  id: string;
+  name: string;
+  logo: string;
+  latitude: number;
+  longitude: number;
+  distance: string;
+  rating: number;
+  isOpen: boolean;
+  lastActive: Date;
+};
+
 // Mock data for sellers
-const MOCK_SELLERS = [
+const MOCK_SELLERS: Seller[] = [
   {
     id: "1",
     name: "Fresh Veggies",
@@ -51,15 +73,15 @@ const LATITUDE_DELTA = 0.0922
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO
 
 const MapScreen = () => {
-  const navigation = useNavigation()
-  const mapRef = useRef(null)
+  const navigation = useNavigation<MapScreenNavigationProp>()
+  const mapRef = useRef<MapView | null>(null)
   const [region, setRegion] = useState({
     latitude: 37.78825,
     longitude: -122.4324,
     latitudeDelta: LATITUDE_DELTA,
     longitudeDelta: LONGITUDE_DELTA,
   })
-  const [selectedSeller, setSelectedSeller] = useState(null)
+  const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({
     showOpenOnly: false,
@@ -69,6 +91,10 @@ const MapScreen = () => {
 
   const bottomSheetHeight = useRef(new Animated.Value(0)).current
   const filtersHeight = useRef(new Animated.Value(0)).current
+
+  const navigateToSearch = () => {
+    navigation.navigate("SearchScreen");
+  };
 
   const toggleFilters = () => {
     Animated.timing(filtersHeight, {
@@ -80,7 +106,7 @@ const MapScreen = () => {
     setShowFilters(!showFilters)
   }
 
-  const handleMarkerPress = (seller) => {
+  const handleMarkerPress = (seller: Seller) => {
     setSelectedSeller(seller)
 
     Animated.timing(bottomSheetHeight, {
@@ -119,7 +145,7 @@ const MapScreen = () => {
     console.log("Refreshing seller data...")
   }
 
-  const isSellerActive = (lastActive) => {
+  const isSellerActive = (lastActive: Date): boolean => {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
     return lastActive > fiveMinutesAgo
   }
@@ -162,10 +188,10 @@ const MapScreen = () => {
       </MapView>
 
       <View style={styles.headerContainer}>
-        <View style={styles.searchBar}>
+        <TouchableOpacity style={styles.searchBar} onPress={navigateToSearch} activeOpacity={0.7}>
           <Ionicons name="search" size={20} color={theme.colors.placeholder} />
           <Text style={styles.searchPlaceholder}>Search for vendors or products</Text>
-        </View>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.filterButton} onPress={toggleFilters} accessibilityLabel="Filter button">
           <Ionicons name="options" size={24} color={theme.colors.text} />
@@ -278,50 +304,57 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: spacing.md,
     alignItems: "center",
+    zIndex: 10,
   },
   searchBar: {
     flex: 1,
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: spacing.md,
     marginRight: spacing.sm,
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 5,
   },
   searchPlaceholder: {
     marginLeft: spacing.sm,
     color: theme.colors.placeholder,
     fontSize: fontSize.md,
+    flex: 1,
   },
   filterButton: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: spacing.md,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 5,
+    height: 48,
+    width: 48,
+    justifyContent: "center",
+    alignItems: "center",
   },
   filtersContainer: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 100 : 80,
+    top: Platform.OS === "ios" ? 110 : 90,
     left: spacing.md,
     right: spacing.md,
     backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: spacing.md,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 5,
     overflow: "hidden",
+    zIndex: 5,
   },
   filtersTitle: {
     fontSize: fontSize.lg,

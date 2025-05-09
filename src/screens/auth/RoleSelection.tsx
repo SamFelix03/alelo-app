@@ -1,12 +1,72 @@
-import { View, StyleSheet, Image, Text, TouchableOpacity, SafeAreaView } from "react-native"
+import { useState } from "react"
+import { View, StyleSheet, Image, Text, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from "react-native"
 import { useNavigation } from "@react-navigation/native"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
+import { supabase } from "../../lib/supabase"
+
+// Define navigation prop types
+type AuthStackParamList = {
+  RoleSelection: undefined;
+  OtpVerification: { role: "buyer" | "seller" | null, phoneNumber: string, existingUser?: boolean, existingUserType?: string };
+};
+
+type RoleSelectionNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
 
 const RoleSelection = () => {
-  const navigation = useNavigation()
+  const navigation = useNavigation<RoleSelectionNavigationProp>()
+  const [phoneNumber, setPhoneNumber] = useState("")
+  const [countryCode, setCountryCode] = useState("+91")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleRoleSelection = (role: "buyer" | "seller") => {
-    navigation.navigate("OtpVerification", { role })
+  const handleContinue = async () => {
+    if (phoneNumber.length < 10) {
+      setError("Please enter a valid phone number")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    try {
+      const formattedPhone = `${countryCode}${phoneNumber}`
+      
+      // Check if user already exists in the database
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone_number', formattedPhone)
+        .single()
+      
+      if (checkError && checkError.code !== 'PGRST116') {
+        // PGRST116 is the error code for "no rows returned" - this means user doesn't exist
+        console.error("Error checking user:", checkError)
+        throw new Error("Failed to check if user exists")
+      }
+      
+      if (existingUser) {
+        // User exists - proceed to OTP verification with existing user info
+        navigation.navigate("OtpVerification", { 
+          role: null,
+          phoneNumber: formattedPhone,
+          existingUser: true,
+          existingUserType: existingUser.user_type
+        })
+      } else {
+        // User doesn't exist - proceed to OTP verification as new user
+        navigation.navigate("OtpVerification", { 
+          role: null,
+          phoneNumber: formattedPhone,
+          existingUser: false
+        })
+      }
+    } catch (error) {
+      console.error("Error in phone verification:", error)
+      setError("Something went wrong. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -17,37 +77,33 @@ const RoleSelection = () => {
         <Text style={styles.subtitle}>Connect with local vendors in real-time</Text>
       </View>
 
-      <View style={styles.roleContainer}>
-        <Text style={styles.question}>How would you like to use StreetVend?</Text>
+      <View style={styles.phoneContainer}>
+        <Text style={styles.question}>Enter your phone number to continue</Text>
+
+        <View style={styles.phoneInputContainer}>
+          <View style={styles.countryCodeContainer}>
+            <Text style={styles.countryCode}>{countryCode}</Text>
+          </View>
+          <TextInput
+            style={styles.phoneInput}
+            placeholder="Phone Number"
+            keyboardType="phone-pad"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            maxLength={10}
+            accessibilityLabel="Phone number input"
+          />
+        </View>
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <TouchableOpacity
-          style={[styles.roleButton, styles.buyerButton]}
-          onPress={() => handleRoleSelection("buyer")}
-          accessibilityLabel="I'm a Buyer button"
-          accessibilityHint="Select if you want to buy goods"
+          style={[styles.continueButton, loading && styles.buttonDisabled]}
+          onPress={handleContinue}
+          disabled={loading}
+          accessibilityLabel="Continue button"
         >
-          <Image
-            source={{ uri: "https://via.placeholder.com/50" }}
-            style={styles.roleIcon}
-            accessibilityLabel="Buyer icon"
-          />
-          <Text style={styles.roleText}>I'm a Buyer</Text>
-          <Text style={styles.roleDescription}>Find and purchase from local vendors</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.roleButton, styles.sellerButton]}
-          onPress={() => handleRoleSelection("seller")}
-          accessibilityLabel="I'm a Seller button"
-          accessibilityHint="Select if you want to sell goods"
-        >
-          <Image
-            source={{ uri: "https://via.placeholder.com/50" }}
-            style={styles.roleIcon}
-            accessibilityLabel="Seller icon"
-          />
-          <Text style={styles.roleText}>I'm a Seller</Text>
-          <Text style={styles.roleDescription}>Sell your products to nearby customers</Text>
+          {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Continue</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -82,9 +138,10 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     textAlign: "center",
   },
-  roleContainer: {
+  phoneContainer: {
     flex: 1,
     justifyContent: "center",
+    marginBottom: spacing.xxl,
   },
   question: {
     fontSize: fontSize.lg,
@@ -92,43 +149,48 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     textAlign: "center",
   },
-  roleButton: {
-    borderRadius: 12,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
+  phoneInputContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  buyerButton: {
-    backgroundColor: "#E8F5E9",
-    borderColor: theme.colors.primary,
     borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    marginBottom: spacing.md,
   },
-  sellerButton: {
-    backgroundColor: "#FFF3E0",
-    borderColor: theme.colors.secondary,
-    borderWidth: 1,
+  countryCodeContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRightWidth: 1,
+    borderRightColor: "#E0E0E0",
+    justifyContent: "center",
   },
-  roleIcon: {
-    width: 50,
-    height: 50,
-    marginRight: spacing.lg,
+  countryCode: {
+    fontSize: fontSize.md,
+    color: theme.colors.text,
   },
-  roleText: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
+  phoneInput: {
     flex: 1,
+    padding: spacing.md,
+    fontSize: fontSize.md,
   },
-  roleDescription: {
+  errorText: {
+    color: "#E53935",
+    marginBottom: spacing.md,
     fontSize: fontSize.sm,
-    color: theme.colors.placeholder,
-    marginTop: spacing.xs,
-    flex: 1,
+  },
+  continueButton: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 8,
+    padding: spacing.md,
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: fontSize.md,
   },
 })
 

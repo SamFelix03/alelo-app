@@ -1,47 +1,60 @@
-"use client"
-import { NavigationContainer } from "@react-navigation/native"
-import { createStackNavigator } from "@react-navigation/stack"
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Import screens
-import RoleSelection from "../screens/auth/RoleSelection"
-import OtpVerification from "../screens/auth/OtpVerification"
-import BuyerOnboarding from "../screens/auth/BuyerOnboarding"
-import SellerOnboarding from "../screens/auth/SellerOnboarding"
-import BuyerTabs from "./BuyerTabs"
-import SellerTabs from "./SellerTabs"
-import SellerProfile from "../screens/buyer/SellerProfile"
-import ProductDetail from "../screens/buyer/ProductDetail"
-import CartScreen from "../screens/buyer/CartScreen"
-import ProductForm from "../screens/seller/ProductForm"
-import SearchScreen from "../screens/buyer/SearchScreen"
+// Main Navigators
+import AuthNavigator from './AuthNavigator';
 
-const Stack = createStackNavigator()
+// Individual Screens
+import SellerProfile from '../screens/buyer/SellerProfile';
+import ProductDetail from '../screens/buyer/ProductDetail';
+import CartScreen from '../screens/buyer/CartScreen';
+import ProductForm from '../screens/seller/ProductForm';
+import SearchScreen from '../screens/buyer/SearchScreen';
+
+// Auth Context Provider
+import { AuthProvider } from '../context/AuthContext';
+
+// Define stack navigator param list
+type RootStackParamList = {
+  Auth: undefined;
+  SellerProfile: { seller: any };
+  ProductDetail: { product: any };
+  CartScreen: { cart?: any[]; seller?: any; product?: any; quantity?: number };
+  ProductForm: { product?: any };
+  SearchScreen: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {/* Auth Flow */}
-        <Stack.Screen name="RoleSelection" component={RoleSelection} />
-        <Stack.Screen name="OtpVerification" component={OtpVerification} />
-        <Stack.Screen name="BuyerOnboarding" component={BuyerOnboarding} />
-        <Stack.Screen name="SellerOnboarding" component={SellerOnboarding} />
+    <AuthProvider>
+      <NavigationContainer>
+        <Stack.Navigator 
+          initialRouteName="Auth"
+          screenOptions={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }}
+        >
+          {/* Auth Navigator handles authentication flow */}
+          <Stack.Screen 
+            name="Auth" 
+            component={AuthNavigator} 
+            options={{ headerShown: false }}
+          />
 
-        {/* Main Flows */}
-        <Stack.Screen name="BuyerTabs" component={BuyerTabs} />
-        <Stack.Screen name="SellerTabs" component={SellerTabs} />
+          {/* Common screens accessible from both buyer and seller flows */}
+          <Stack.Screen name="SellerProfile" component={SellerProfile} />
+          <Stack.Screen name="ProductDetail" component={ProductDetail} />
+          <Stack.Screen name="CartScreen" component={CartScreen} />
+          <Stack.Screen name="ProductForm" component={ProductForm} />
+          <Stack.Screen name="SearchScreen" component={SearchScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </AuthProvider>
+  );
+};
 
-        {/* Buyer Screens */}
-        <Stack.Screen name="SellerProfile" component={SellerProfile} />
-        <Stack.Screen name="ProductDetail" component={ProductDetail} />
-        <Stack.Screen name="CartScreen" component={CartScreen} />
-        <Stack.Screen name="SearchScreen" component={SearchScreen} />
-
-        {/* Seller Screens */}
-        <Stack.Screen name="ProductForm" component={ProductForm} />
-      </Stack.Navigator>
-    </NavigationContainer>
-  )
-}
-
-export default AppNavigator
+export default AppNavigator;
