@@ -1,13 +1,15 @@
+"use client"
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
 import { Ionicons } from "@expo/vector-icons"
 import { theme } from "../theme"
 
-// Buyer Screens
+// Import screens
 import MapScreen from "../screens/buyer/MapScreen"
 import ListScreen from "../screens/buyer/ListScreen"
 import ShopScreen from "../screens/buyer/ShopScreen"
 import OrdersScreen from "../screens/buyer/OrdersScreen"
 import ProfileScreen from "../screens/buyer/ProfileScreen"
+import NotificationsScreen from "../screens/buyer/NotificationsScreen"
 
 const Tab = createBottomTabNavigator()
 
@@ -15,24 +17,6 @@ const BuyerTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.placeholder,
-        tabBarStyle: {
-          elevation: 5,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          borderTopWidth: 1,
-          borderTopColor: "#F0F0F0",
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "500",
-          marginBottom: 5,
-        },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName
 
@@ -46,10 +30,15 @@ const BuyerTabs = () => {
             iconName = focused ? "receipt" : "receipt-outline"
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline"
+          } else if (route.name === "Notifications") {
+            iconName = focused ? "notifications" : "notifications-outline"
           }
 
           return <Ionicons name={iconName} size={size} color={color} />
         },
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.placeholder,
+        headerShown: false,
       })}
     >
       <Tab.Screen name="Map" component={MapScreen} />
@@ -57,6 +46,14 @@ const BuyerTabs = () => {
       <Tab.Screen name="Shop" component={ShopScreen} />
       <Tab.Screen name="Orders" component={OrdersScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{
+          tabBarBadge: 3, // This would be dynamic in a real app
+          tabBarBadgeStyle: { backgroundColor: theme.colors.primary },
+        }}
+      />
     </Tab.Navigator>
   )
 }
