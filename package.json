@@ -50,6 +50,7 @@
     "@react-navigation/stack": "^6.3.20",
     "@supabase/supabase-js": "^2.49.4",
     "autoprefixer": "^10.4.20",
+    "base64-arraybuffer": "^1.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -82,7 +83,8 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "latest",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "expo-image-manipulator": "~11.8.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

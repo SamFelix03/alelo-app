@@ -46,6 +46,7 @@ type RootStackParamList = {
     product?: DisplayProduct;
     isTemplate?: boolean;
   } | undefined;
+  ProductTemplates: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -283,7 +284,7 @@ const ProductsScreen = () => {
   }
 
   const handleAddProduct = () => {
-    navigation.navigate('ProductForm')
+    navigation.navigate('ProductTemplates')
   }
 
   const handleEditProduct = (product: DisplayProduct) => {

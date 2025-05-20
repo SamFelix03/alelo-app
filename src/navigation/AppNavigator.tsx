@@ -9,7 +9,7 @@ import AuthNavigator from './AuthNavigator';
 import SellerProfile from '../screens/buyer/SellerProfile';
 import ProductDetail from '../screens/buyer/ProductDetail';
 import CartScreen from '../screens/buyer/CartScreen';
-import ProductForm from '../screens/seller/ProductForm';
+import ProductTemplatesScreen from '../screens/seller/ProductTemplatesScreen';
 import SearchScreen from '../screens/buyer/SearchScreen';
 
 // Auth Context Provider
@@ -21,7 +21,7 @@ type RootStackParamList = {
   SellerProfile: { seller: any };
   ProductDetail: { product: any };
   CartScreen: { cart?: any[]; seller?: any; product?: any; quantity?: number };
-  ProductForm: { product?: any };
+  ProductTemplates: undefined;
   SearchScreen: undefined;
 };
 
@@ -46,11 +46,11 @@ const AppNavigator = () => {
           />
 
           {/* Common screens accessible from both buyer and seller flows */}
-        <Stack.Screen name="SellerProfile" component={SellerProfile} />
-        <Stack.Screen name="ProductDetail" component={ProductDetail} />
-        <Stack.Screen name="CartScreen" component={CartScreen} />
-          <Stack.Screen name="ProductForm" component={ProductForm} />
-        <Stack.Screen name="SearchScreen" component={SearchScreen} />
+          <Stack.Screen name="SellerProfile" component={SellerProfile} />
+          <Stack.Screen name="ProductDetail" component={ProductDetail} />
+          <Stack.Screen name="CartScreen" component={CartScreen} />
+          <Stack.Screen name="ProductTemplates" component={ProductTemplatesScreen} />
+          <Stack.Screen name="SearchScreen" component={SearchScreen} />
       </Stack.Navigator>
     </NavigationContainer>
     </AuthProvider>

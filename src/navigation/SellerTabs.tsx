@@ -1,5 +1,6 @@
 "use client"
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
+import { createNativeStackNavigator } from "@react-navigation/native-stack"
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"
 import { View, Text, StyleSheet, Platform } from "react-native"
 import { theme } from "../theme"
@@ -10,8 +11,19 @@ import ProductsScreen from "../screens/seller/ProductsScreen"
 import OrdersScreen from "../screens/seller/OrdersScreen"
 import CustomersScreen from "../screens/seller/CustomersScreen"
 import ProfileScreen from "../screens/seller/ProfileScreen"
+import ProductForm from "../screens/seller/ProductForm"
 
 const Tab = createBottomTabNavigator()
+const ProductsStack = createNativeStackNavigator()
+
+const ProductsStackScreen = () => {
+  return (
+    <ProductsStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProductsStack.Screen name="ProductsList" component={ProductsScreen} />
+      <ProductsStack.Screen name="ProductForm" component={ProductForm} />
+    </ProductsStack.Navigator>
+  )
+}
 
 export const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64
 const MIDDLE_BUTTON_SIZE = 52
@@ -96,7 +108,7 @@ const SellerTabs = () => {
       })}
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
-      <Tab.Screen name="Products" component={ProductsScreen} />
+      <Tab.Screen name="Products" component={ProductsStackScreen} />
       <Tab.Screen 
         name="Customers" 
         component={CustomersScreen} 

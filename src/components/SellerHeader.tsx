@@ -1,16 +1,18 @@
 import React from 'react'
-import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native'
+import { View, Text, StyleSheet, Platform, StatusBar, TouchableOpacity } from 'react-native'
 import { theme, spacing, fontSize } from '../theme'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 
 interface SellerHeaderProps {
   title: string
   rightElement?: React.ReactNode
+  onBack?: () => void
 }
 
 export const HEADER_HEIGHT = Platform.OS === 'ios' ? 100 : 80
 
-const SellerHeader: React.FC<SellerHeaderProps> = ({ title, rightElement }) => {
+const SellerHeader: React.FC<SellerHeaderProps> = ({ title, rightElement, onBack }) => {
   const insets = useSafeAreaInsets()
   
   return (
@@ -21,7 +23,16 @@ const SellerHeader: React.FC<SellerHeaderProps> = ({ title, rightElement }) => {
       }
     ]}>
       <View style={styles.content}>
-        <Text style={styles.title}>{title}</Text>
+        {onBack && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        )}
+        <Text style={[styles.title, onBack && styles.titleWithBack]}>{title}</Text>
         {rightElement && (
           <View style={styles.rightElement}>
             {rightElement}
@@ -50,10 +61,18 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: theme.colors.text,
+    flex: 1,
+  },
+  titleWithBack: {
+    marginLeft: spacing.md,
   },
   rightElement: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  backButton: {
+    padding: spacing.xs,
+    marginLeft: -spacing.xs,
   },
 })
 
