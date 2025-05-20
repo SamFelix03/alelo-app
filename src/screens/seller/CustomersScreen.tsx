@@ -1,10 +1,12 @@
 "use client"
 
+import React from 'react'
 import { useState } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, SafeAreaView, FlatList } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import SellerHeader from '../../components/SellerHeader'
 
 // Mock data for customers
 const MOCK_CUSTOMERS = [
@@ -209,9 +211,7 @@ const CustomersScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Customers</Text>
-      </View>
+      <SellerHeader title="Customers" />
 
       <View style={styles.filtersContainer}>
         <View style={styles.sortContainer}>
@@ -291,15 +291,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-  },
-  header: {
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
   },
   filtersContainer: {
     padding: spacing.md,

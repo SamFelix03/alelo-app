@@ -13,7 +13,7 @@ import ProfileScreen from "../screens/seller/ProfileScreen"
 
 const Tab = createBottomTabNavigator()
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64
+export const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64
 const MIDDLE_BUTTON_SIZE = 52
 
 const SellerTabs = () => {

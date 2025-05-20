@@ -1,11 +1,13 @@
 "use client"
 
+import React from 'react'
 import { useState } from "react"
 import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
+import SellerHeader from '../../components/SellerHeader'
 
 interface Buyer {
   id: string;
@@ -92,6 +94,7 @@ const DashboardScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <SellerHeader title="Dashboard" />
       <View style={styles.mapContainer}>
         <MapView
           style={styles.map}

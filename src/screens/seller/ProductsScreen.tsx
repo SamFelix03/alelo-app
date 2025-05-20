@@ -1,95 +1,293 @@
 "use client"
 
-import { useState } from "react"
-import { View, StyleSheet, Text, Image, TouchableOpacity, FlatList, SafeAreaView, Alert } from "react-native"
+import { useState, useEffect } from "react"
+import { View, StyleSheet, Text, Image, TouchableOpacity, FlatList, SafeAreaView, Alert, ActivityIndicator } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
+import { supabase } from "../../lib/supabase"
+import { TAB_BAR_HEIGHT } from "../../navigation/SellerTabs"
+import SellerHeader from "../../components/SellerHeader"
 
-// Mock data for products
-const MOCK_PRODUCTS = [
-  {
-    id: "1",
-    name: "Fresh Tomatoes",
-    image: "https://via.placeholder.com/150?text=Tomatoes",
-    price: "$2.50/kg",
-    category: "Vegetables",
-    inStock: true,
-  },
-  {
-    id: "2",
-    name: "Organic Apples",
-    image: "https://via.placeholder.com/150?text=Apples",
-    price: "$3.00/kg",
-    category: "Fruits",
-    inStock: true,
-  },
-  {
-    id: "3",
-    name: "Fresh Bread",
-    image: "https://via.placeholder.com/150?text=Bread",
-    price: "$2.00/loaf",
-    category: "Bakery",
-    inStock: false,
-  },
-  {
-    id: "4",
-    name: "Milk",
-    image: "https://via.placeholder.com/150?text=Milk",
-    price: "$1.50/liter",
-    category: "Dairy",
-    inStock: true,
-  },
-  {
-    id: "5",
-    name: "Eggs",
-    image: "https://via.placeholder.com/150?text=Eggs",
-    price: "$3.50/dozen",
-    category: "Dairy",
-    inStock: true,
-  },
-  {
-    id: "6",
-    name: "Potatoes",
-    image: "https://via.placeholder.com/150?text=Potatoes",
-    price: "$1.20/kg",
-    category: "Vegetables",
-    inStock: true,
-  },
-]
+interface ProductTemplate {
+  template_id: string;
+  name: string;
+  image_url: string | null;
+  suggested_price: number;
+  price_unit: string;
+  product_type: 'fruits' | 'vegetables' | 'prepared_food' | 'beverages' | 'crafts' | 'other';
+  description: string | null;
+}
+
+interface SellerProduct {
+  seller_product_id: string;
+  template_id: string | null;
+  name: string;
+  image_url: string | null;
+  price: number;
+  price_unit: string;
+  product_type: 'fruits' | 'vegetables' | 'prepared_food' | 'beverages' | 'crafts' | 'other';
+  description: string | null;
+  is_available: boolean;
+  is_active: boolean;
+}
+
+interface DisplayProduct extends ProductTemplate {
+  isSelected?: boolean;
+  isInCatalog?: boolean;
+  seller_product_id?: string;
+  current_price?: number;
+  is_available?: boolean;
+}
+
+type RootStackParamList = {
+  ProductForm: { 
+    product?: DisplayProduct;
+    isTemplate?: boolean;
+  } | undefined;
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const ProductsScreen = () => {
-  const navigation = useNavigation()
-  const [products, setProducts] = useState(MOCK_PRODUCTS)
-  const [viewMode, setViewMode] = useState("grid") // 'grid' or 'list'
-  const [selectedProducts, setSelectedProducts] = useState([])
+  const navigation = useNavigation<NavigationProp>()
+  const [products, setProducts] = useState<DisplayProduct[]>([])
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isBusinessStarted, setIsBusinessStarted] = useState(false)
+  const [sellerId, setSellerId] = useState<string | null>(null)
+
+  // Fetch all available products and seller status
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get current seller's ID and status
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: sellerData, error: sellerError } = await supabase
+          .from('sellers')
+          .select('seller_id, is_open')
+          .eq('phone_number', user.phone)
+          .single()
+
+        if (sellerError) throw sellerError
+
+        setSellerId(sellerData.seller_id)
+        setIsBusinessStarted(sellerData.is_open)
+
+        // Get all template products
+        const { data: templates, error: templatesError } = await supabase
+          .from('product_templates')
+          .select('*')
+
+        if (templatesError) throw templatesError
+
+        // Get seller's current products
+        const { data: sellerProducts, error: productsError } = await supabase
+          .from('seller_products')
+          .select('*')
+          .eq('seller_id', sellerData.seller_id)
+          .eq('is_active', true)
+
+        if (productsError) throw productsError
+
+        // Combine the data
+        const displayProducts = templates.map(template => {
+          const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
+          return {
+            ...template,
+            isSelected: !!sellerProduct,
+            isInCatalog: !!sellerProduct,
+            seller_product_id: sellerProduct?.seller_product_id,
+            current_price: sellerProduct?.price ?? template.suggested_price,
+            is_available: sellerProduct?.is_available ?? true
+          }
+        })
+
+        setProducts(displayProducts)
+        setSelectedProducts(displayProducts.filter(p => p.isInCatalog).map(p => p.template_id))
+      } catch (error) {
+        console.error('Error fetching data:', error)
+        Alert.alert('Error', 'Failed to load products. Please try again.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  const handleStartBusiness = async () => {
+    if (selectedProducts.length === 0) {
+      Alert.alert('No Products Selected', 'Please select at least one product to start your business.')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      
+      if (!sellerId) throw new Error('No seller ID found')
+
+      // Create selected products for the seller
+      const productsToCreate = selectedProducts.map(templateId => {
+        const template = products.find(p => p.template_id === templateId)
+        if (!template) return null
+
+        return {
+          seller_id: sellerId,
+          template_id: template.template_id,
+          name: template.name,
+          description: template.description,
+          image_url: template.image_url,
+          price: template.suggested_price,
+          price_unit: template.price_unit,
+          product_type: template.product_type,
+          is_available: true,
+          is_active: true
+        }
+      }).filter(Boolean)
+
+      // Insert products into seller's catalog
+      const { error: insertError } = await supabase
+        .from('seller_products')
+        .insert(productsToCreate)
+
+      if (insertError) throw insertError
+
+      // Update seller status to open
+      const { error: updateError } = await supabase
+        .from('sellers')
+        .update({ is_open: true })
+        .eq('seller_id', sellerId)
+
+      if (updateError) throw updateError
+
+      setIsBusinessStarted(true)
+      Alert.alert('Success', 'Your business is now visible to customers!')
+
+      // Refresh the product list
+      const { data: sellerProducts, error: refreshError } = await supabase
+        .from('seller_products')
+        .select('*')
+        .eq('seller_id', sellerId)
+        .eq('is_active', true)
+
+      if (refreshError) throw refreshError
+
+      // Update the display products
+      setProducts(products.map(template => {
+        const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
+        return {
+          ...template,
+          isSelected: !!sellerProduct,
+          isInCatalog: !!sellerProduct,
+          seller_product_id: sellerProduct?.seller_product_id,
+          current_price: sellerProduct?.price ?? template.suggested_price,
+          is_available: sellerProduct?.is_available ?? true
+        }
+      }))
+
+    } catch (error) {
+      console.error('Error starting business:', error)
+      Alert.alert('Error', 'Failed to start business. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const toggleProductSelection = async (templateId: string) => {
+    if (!isBusinessStarted) {
+      // Just toggle selection for initial setup
+      setSelectedProducts(prev => 
+        prev.includes(templateId) 
+          ? prev.filter(id => id !== templateId)
+          : [...prev, templateId]
+      )
+      return
+    }
+
+    // If business is started, we're adding/removing from catalog
+    try {
+      const product = products.find(p => p.template_id === templateId)
+      if (!product) return
+
+      if (product.isInCatalog) {
+        // Remove from catalog (soft delete)
+        const { error } = await supabase
+          .from('seller_products')
+          .update({ is_active: false })
+          .eq('seller_product_id', product.seller_product_id)
+
+        if (error) throw error
+      } else {
+        // Add to catalog
+        const { error } = await supabase
+          .from('seller_products')
+          .insert({
+            seller_id: sellerId,
+            template_id: templateId,
+            name: product.name,
+            description: product.description,
+            image_url: product.image_url,
+            price: product.suggested_price,
+            price_unit: product.price_unit,
+            product_type: product.product_type,
+            is_available: true,
+            is_active: true
+          })
+
+        if (error) throw error
+      }
+
+      // Refresh the product list
+      const { data: sellerProducts, error: refreshError } = await supabase
+        .from('seller_products')
+        .select('*')
+        .eq('seller_id', sellerId)
+        .eq('is_active', true)
+
+      if (refreshError) throw refreshError
+
+      // Update the display products
+      setProducts(products.map(template => {
+        const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
+        return {
+          ...template,
+          isSelected: !!sellerProduct,
+          isInCatalog: !!sellerProduct,
+          seller_product_id: sellerProduct?.seller_product_id,
+          current_price: sellerProduct?.price ?? template.suggested_price,
+          is_available: sellerProduct?.is_available ?? true
+        }
+      }))
+
+    } catch (error) {
+      console.error('Error updating product catalog:', error)
+      Alert.alert('Error', 'Failed to update product catalog. Please try again.')
+    }
+  }
 
   const toggleViewMode = () => {
     setViewMode(viewMode === "grid" ? "list" : "grid")
   }
 
-  const toggleProductSelection = (id) => {
-    if (selectedProducts.includes(id)) {
-      setSelectedProducts(selectedProducts.filter((productId) => productId !== id))
-    } else {
-      setSelectedProducts([...selectedProducts, id])
-    }
-  }
-
-  const toggleStockStatus = (id) => {
+  const toggleStockStatus = (id: string) => {
     const updatedProducts = products.map((product) =>
-      product.id === id ? { ...product, inStock: !product.inStock } : product,
+      product.template_id === id ? { ...product, is_available: !product.is_available } : product,
     )
 
     setProducts(updatedProducts)
   }
 
   const handleAddProduct = () => {
-    navigation.navigate("ProductForm")
+    navigation.navigate('ProductForm')
   }
 
-  const handleEditProduct = (product) => {
-    navigation.navigate("ProductForm", { product })
+  const handleEditProduct = (product: DisplayProduct) => {
+    navigation.navigate('ProductForm', { product })
   }
 
   const handleBatchAction = () => {
@@ -107,7 +305,7 @@ const ProductsScreen = () => {
         text: "Confirm",
         onPress: () => {
           const updatedProducts = products.map((product) =>
-            selectedProducts.includes(product.id) ? { ...product, inStock: false } : product,
+            selectedProducts.includes(product.template_id) ? { ...product, is_available: false } : product,
           )
 
           setProducts(updatedProducts)
@@ -117,55 +315,59 @@ const ProductsScreen = () => {
     ])
   }
 
-  const renderGridItem = ({ item }) => (
+  const handleAddToTemplates = () => {
+    navigation.navigate('ProductForm', { isTemplate: true })
+  }
+
+  const renderGridItem = ({ item }: { item: DisplayProduct }) => (
     <View style={styles.gridItem}>
       <TouchableOpacity
-        style={[styles.productCard, selectedProducts.includes(item.id) && styles.productCardSelected]}
-        onPress={() => toggleProductSelection(item.id)}
+        style={[styles.productCard, selectedProducts.includes(item.template_id) && styles.productCardSelected]}
+        onPress={() => toggleProductSelection(item.template_id)}
         onLongPress={() => handleEditProduct(item)}
         accessibilityLabel={`${item.name} card`}
       >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: item.image }} style={styles.productImage} accessibilityLabel={`${item.name} image`} />
+          <Image source={{ uri: item.image_url as string }} style={styles.productImage} accessibilityLabel={`${item.name} image`} />
 
-          {!item.inStock && (
+          {!item.is_available && (
             <View style={styles.outOfStockOverlay}>
               <Text style={styles.outOfStockText}>Out of Stock</Text>
             </View>
           )}
 
           <TouchableOpacity
-            style={[styles.stockToggle, item.inStock ? styles.inStockToggle : styles.outOfStockToggle]}
-            onPress={() => toggleStockStatus(item.id)}
+            style={[styles.stockToggle, item.is_available ? styles.inStockToggle : styles.outOfStockToggle]}
+            onPress={() => toggleStockStatus(item.template_id)}
             accessibilityLabel={`Toggle ${item.name} stock status`}
           >
-            <Ionicons name={item.inStock ? "checkmark" : "close"} size={16} color="#FFFFFF" />
+            <Ionicons name={item.is_available ? "checkmark" : "close"} size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.productPrice}>{item.price}</Text>
+          <Text style={styles.productPrice}>{item.current_price} {item.price_unit}</Text>
 
           <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{item.category}</Text>
+            <Text style={styles.categoryText}>{item.product_type}</Text>
           </View>
         </View>
       </TouchableOpacity>
     </View>
   )
 
-  const renderListItem = ({ item }) => (
+  const renderListItem = ({ item }: { item: DisplayProduct }) => (
     <TouchableOpacity
-      style={[styles.listItem, selectedProducts.includes(item.id) && styles.listItemSelected]}
-      onPress={() => toggleProductSelection(item.id)}
+      style={[styles.listItem, selectedProducts.includes(item.template_id) && styles.listItemSelected]}
+      onPress={() => toggleProductSelection(item.template_id)}
       onLongPress={() => handleEditProduct(item)}
       accessibilityLabel={`${item.name} list item`}
     >
       <View style={styles.listImageContainer}>
-        <Image source={{ uri: item.image }} style={styles.listItemImage} accessibilityLabel={`${item.name} image`} />
+        <Image source={{ uri: item.image_url as string }} style={styles.listItemImage} accessibilityLabel={`${item.name} image`} />
 
-        {!item.inStock && (
+        {!item.is_available && (
           <View style={styles.outOfStockOverlayList}>
             <Text style={styles.outOfStockText}>Out of Stock</Text>
           </View>
@@ -174,72 +376,122 @@ const ProductsScreen = () => {
 
       <View style={styles.listItemInfo}>
         <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>{item.price}</Text>
+        <Text style={styles.productPrice}>{item.current_price} {item.price_unit}</Text>
 
         <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{item.category}</Text>
+          <Text style={styles.categoryText}>{item.product_type}</Text>
         </View>
       </View>
 
       <TouchableOpacity
-        style={[styles.stockToggleList, item.inStock ? styles.inStockToggle : styles.outOfStockToggle]}
-        onPress={() => toggleStockStatus(item.id)}
+        style={[styles.stockToggleList, item.is_available ? styles.inStockToggle : styles.outOfStockToggle]}
+        onPress={() => toggleStockStatus(item.template_id)}
         accessibilityLabel={`Toggle ${item.name} stock status`}
       >
-        <Ionicons name={item.inStock ? "checkmark" : "close"} size={16} color="#FFFFFF" />
+        <Ionicons name={item.is_available ? "checkmark" : "close"} size={16} color="#FFFFFF" />
       </TouchableOpacity>
+    </TouchableOpacity>
+  )
+
+  const ViewModeButton = (
+    <TouchableOpacity
+      style={styles.viewModeButton}
+      onPress={toggleViewMode}
+      accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
+    >
+      <Ionicons 
+        name={viewMode === "grid" ? "list" : "grid"} 
+        size={22} 
+        color={theme.colors.text} 
+      />
     </TouchableOpacity>
   )
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Products</Text>
-
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={styles.viewModeButton}
-            onPress={toggleViewMode}
-            accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
-          >
-            <Ionicons name={viewMode === "grid" ? "list" : "grid"} size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.addButton} onPress={handleAddProduct} accessibilityLabel="Add product button">
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
-      </View>
-
-      {selectedProducts.length > 0 && (
-        <View style={styles.batchActionContainer}>
-          <Text style={styles.selectedText}>{selectedProducts.length} product(s) selected</Text>
-
-          <TouchableOpacity
-            style={styles.batchActionButton}
-            onPress={handleBatchAction}
-            accessibilityLabel="Mark as out of stock button"
-          >
-            <Text style={styles.batchActionText}>Mark as Out of Stock</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {viewMode === "grid" ? (
-        <FlatList
-          data={products}
-          renderItem={renderGridItem}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={styles.productsGrid}
-        />
       ) : (
-        <FlatList
-          data={products}
-          renderItem={renderListItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.productsList}
-        />
+        <>
+          <SellerHeader title="Products" rightElement={ViewModeButton} />
+
+          {!isBusinessStarted && (
+            <View style={styles.startBusinessContainer}>
+              <View style={styles.startBusinessWrapper}>
+                <Text style={styles.startBusinessHint}>
+                  Select products and start your business to become visible to customers
+                </Text>
+                <TouchableOpacity
+                  style={styles.startBusinessButton}
+                  onPress={handleStartBusiness}
+                  disabled={isLoading}
+                >
+                  <Ionicons name="rocket-outline" size={20} color="#FFFFFF" style={styles.startBusinessIcon} />
+                  <Text style={styles.startBusinessText}>Start Business</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {selectedProducts.length > 0 && (
+            <View style={styles.batchActionContainer}>
+              <Text style={styles.selectedText}>{selectedProducts.length} product(s) selected</Text>
+
+              <TouchableOpacity
+                style={styles.batchActionButton}
+                onPress={handleBatchAction}
+                accessibilityLabel="Mark as out of stock button"
+              >
+                <Text style={styles.batchActionText}>Mark as Out of Stock</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {viewMode === "grid" ? (
+            <FlatList
+              key="grid"
+              data={products}
+              renderItem={renderGridItem}
+              keyExtractor={(item) => item.template_id}
+              numColumns={2}
+              contentContainerStyle={[
+                styles.productsGrid,
+                { paddingBottom: TAB_BAR_HEIGHT + 80 } // Extra padding for FAB
+              ]}
+              removeClippedSubviews={true}
+              initialNumToRender={6}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+            />
+          ) : (
+            <FlatList
+              key="list"
+              data={products}
+              renderItem={renderListItem}
+              keyExtractor={(item) => item.template_id}
+              numColumns={1}
+              contentContainerStyle={[
+                styles.productsList,
+                { paddingBottom: TAB_BAR_HEIGHT + 80 } // Extra padding for FAB
+              ]}
+              removeClippedSubviews={true}
+              initialNumToRender={8}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+            />
+          )}
+
+          {/* Floating Action Button */}
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={isBusinessStarted ? handleAddProduct : handleAddToTemplates}
+            accessibilityLabel={isBusinessStarted ? "Add product to my business" : "Add new product to catalog"}
+          >
+            <Ionicons name="add" size={30} color="#FFFFFF" />
+          </TouchableOpacity>
+        </>
       )}
     </SafeAreaView>
   )
@@ -250,33 +502,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
-  },
-  headerButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   viewModeButton: {
-    padding: spacing.sm,
-    marginRight: spacing.md,
-  },
-  addButton: {
-    backgroundColor: theme.colors.primary,
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  startBusinessContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  startBusinessWrapper: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  startBusinessHint: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  startBusinessButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 25, // Pill shape
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  startBusinessIcon: {
+    marginRight: spacing.xs,
+  },
+  startBusinessText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
   batchActionContainer: {
     flexDirection: "row",
@@ -440,6 +710,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     alignSelf: "center",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: spacing.lg,
+    bottom: TAB_BAR_HEIGHT + spacing.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
 })
 

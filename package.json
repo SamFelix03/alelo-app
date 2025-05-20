@@ -57,6 +57,7 @@
     "embla-carousel-react": "latest",
     "expo": "~50.0.7",
     "expo-font": "~11.10.2",
+    "expo-image-picker": "^16.1.4",
     "expo-status-bar": "~1.11.1",
     "expo-updates": "~0.24.11",
     "input-otp": "latest",

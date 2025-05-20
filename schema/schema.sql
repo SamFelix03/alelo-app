@@ -323,3 +323,43 @@ FROM
   buyers b
 JOIN liked l ON b.buyer_id = l.buyer_id
 JOIN sellers s ON l.seller_id = s.seller_id;
+
+-- Create table for template products (base catalog)
+CREATE TABLE product_templates (
+    template_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    suggested_price DECIMAL(10, 2) NOT NULL,
+    price_unit VARCHAR(20) NOT NULL,
+    product_type product_type NOT NULL
+);
+
+-- Create table for seller's product catalog
+CREATE TABLE seller_products (
+    seller_product_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    seller_id UUID NOT NULL REFERENCES sellers(seller_id) ON DELETE CASCADE,
+    template_id UUID REFERENCES product_templates(template_id),
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    price_unit VARCHAR(20) NOT NULL,
+    product_type product_type NOT NULL,
+    is_available BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(seller_id, template_id)
+);
+
+-- Add trigger for updated_at
+CREATE TRIGGER update_seller_products_modified
+    BEFORE UPDATE ON seller_products
+    FOR EACH ROW
+    EXECUTE FUNCTION update_modified_column();
+
+-- Add indexes for common queries
+CREATE INDEX seller_products_seller_id_idx ON seller_products(seller_id);
+CREATE INDEX seller_products_template_id_idx ON seller_products(template_id);
+CREATE INDEX seller_products_active_idx ON seller_products(seller_id, is_active);

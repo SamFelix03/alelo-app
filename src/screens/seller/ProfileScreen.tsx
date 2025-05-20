@@ -1,5 +1,6 @@
 "use client"
 
+import React from 'react'
 import { useState, useEffect } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, ActivityIndicator, Modal, TextInput } from "react-native"
 import { useNavigation } from "@react-navigation/native"
@@ -8,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons"
 import { signOut } from "../../lib/auth"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
+import SellerHeader from '../../components/SellerHeader'
 
 type NotificationSettings = {
   orderAlerts: boolean;
@@ -119,6 +121,7 @@ const SellerProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <SellerHeader title="Profile" />
       <ScrollView>
         <View style={styles.header}>
           <Text style={styles.title}>Business Profile</Text>
