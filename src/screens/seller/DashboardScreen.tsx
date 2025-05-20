@@ -7,8 +7,18 @@ import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
 
+interface Buyer {
+  id: string;
+  name: string;
+  avatar: string;
+  latitude: number;
+  longitude: number;
+  distance: string;
+  lastOrder: Date;
+}
+
 // Mock data for buyers
-const MOCK_BUYERS = [
+const MOCK_BUYERS: Buyer[] = [
   {
     id: "1",
     name: "John Doe",
@@ -50,19 +60,19 @@ const MOCK_STATS = {
 const DashboardScreen = () => {
   const navigation = useNavigation()
   const [isOpen, setIsOpen] = useState(false)
-  const [selectedBuyer, setSelectedBuyer] = useState(null)
+  const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null)
 
   const toggleBusinessStatus = () => {
     setIsOpen(!isOpen)
   }
 
-  const handleBuyerMarkerPress = (buyer) => {
+  const handleBuyerMarkerPress = (buyer: Buyer) => {
     setSelectedBuyer(buyer)
   }
 
-  const formatDate = (date) => {
+  const formatDate = (date: Date) => {
     const now = new Date()
-    const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24))
+    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
 
     if (diffInDays === 0) {
       return "Today"
@@ -82,148 +92,113 @@ const DashboardScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
-        <View style={styles.header}>
-          <Text style={styles.title}>Dashboard</Text>
-        </View>
+      <View style={styles.mapContainer}>
+        <MapView
+          style={styles.map}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={{
+            latitude: 37.78825,
+            longitude: -122.4324,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
+          showsUserLocation
+        >
+          {/* Seller's position (you) */}
+          <Marker
+            coordinate={{
+              latitude: 37.78825,
+              longitude: -122.4324,
+            }}
+          >
+            <View style={styles.sellerMarker}>
+              <Ionicons name="business" size={20} color="#FFFFFF" />
+            </View>
+          </Marker>
 
-        <View style={styles.businessStatusContainer}>
-          <View>
-            <Text style={styles.businessStatusLabel}>Business Status</Text>
-            <Text style={styles.businessStatusDescription}>
-              {isOpen ? "You are visible to nearby customers" : "You are not visible to customers"}
-            </Text>
+          {/* Buyers' positions */}
+          {MOCK_BUYERS.map((buyer) => (
+            <Marker
+              key={buyer.id}
+              coordinate={{
+                latitude: buyer.latitude,
+                longitude: buyer.longitude,
+              }}
+              onPress={() => handleBuyerMarkerPress(buyer)}
+            >
+              <View style={styles.buyerMarker}>
+                <Ionicons name="person" size={16} color="#FFFFFF" />
+              </View>
+            </Marker>
+          ))}
+        </MapView>
+
+        <View style={styles.overlayContainer}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Dashboard</Text>
           </View>
 
-          <Switch
-            value={isOpen}
-            onValueChange={toggleBusinessStatus}
-            trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-            thumbColor={isOpen ? theme.colors.primary : "#F5F5F5"}
-            ios_backgroundColor="#D1D1D1"
-            style={styles.switch}
-            accessibilityLabel="Toggle business status"
-          />
-        </View>
-
-        {isOpen && (
-          <View style={styles.locationSharingContainer}>
-            <View style={styles.locationIconContainer}>
-              <Ionicons name="globe" size={24} color={theme.colors.primary} />
-            </View>
-
-            <View style={styles.locationTextContainer}>
-              <Text style={styles.locationSharingText}>Location sharing is active</Text>
-              <Text style={styles.locationSharingDescription}>
-                Your real-time location is being shared with nearby customers
+          <View style={styles.businessStatusContainer}>
+            <View>
+              <Text style={styles.businessStatusLabel}>Business Status</Text>
+              <Text style={styles.businessStatusDescription}>
+                {isOpen ? "You are visible to nearby customers" : "You are not visible to customers"}
               </Text>
             </View>
+
+            <Switch
+              value={isOpen}
+              onValueChange={toggleBusinessStatus}
+              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+              thumbColor={isOpen ? theme.colors.primary : "#F5F5F5"}
+              ios_backgroundColor="#D1D1D1"
+              style={styles.switch}
+              accessibilityLabel="Toggle business status"
+            />
+          </View>
+
+          {isOpen && (
+            <View style={styles.locationSharingContainer}>
+              <View style={styles.locationIconContainer}>
+                <Ionicons name="globe" size={24} color={theme.colors.primary} />
+              </View>
+
+              <View style={styles.locationTextContainer}>
+                <Text style={styles.locationSharingText}>Location sharing is active</Text>
+                <Text style={styles.locationSharingDescription}>
+                  Your real-time location is being shared with nearby customers
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {selectedBuyer && (
+          <View style={styles.buyerPreview}>
+            <Image
+              source={{ uri: selectedBuyer.avatar }}
+              style={styles.buyerAvatar}
+              accessibilityLabel={`${selectedBuyer.name} avatar`}
+            />
+
+            <View style={styles.buyerInfo}>
+              <Text style={styles.buyerName}>{selectedBuyer.name}</Text>
+              <View style={styles.buyerMetaRow}>
+                <Text style={styles.buyerDistance}>{selectedBuyer.distance}</Text>
+                <Text style={styles.buyerLastOrder}>Last order: {formatDate(selectedBuyer.lastOrder)}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.viewProfileButton}
+              onPress={navigateToBuyerProfile}
+              accessibilityLabel="View profile button"
+            >
+              <Text style={styles.viewProfileText}>View Profile</Text>
+            </TouchableOpacity>
           </View>
         )}
-
-        <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Today's Stats</Text>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{MOCK_STATS.todayOrders}</Text>
-              <Text style={styles.statLabel}>Orders</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{MOCK_STATS.pendingOrders}</Text>
-              <Text style={styles.statLabel}>Pending</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{MOCK_STATS.completedOrders}</Text>
-              <Text style={styles.statLabel}>Completed</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{MOCK_STATS.revenue}</Text>
-              <Text style={styles.statLabel}>Revenue</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{MOCK_STATS.avgPrepTime}</Text>
-              <Text style={styles.statLabel}>Avg. Prep Time</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.mapContainer}>
-          <Text style={styles.sectionTitle}>Nearby Customers</Text>
-
-          <View style={styles.mapWrapper}>
-            <MapView
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={{
-                latitude: 37.78825,
-                longitude: -122.4324,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
-              }}
-              showsUserLocation
-            >
-              {/* Seller's position (you) */}
-              <Marker
-                coordinate={{
-                  latitude: 37.78825,
-                  longitude: -122.4324,
-                }}
-              >
-                <View style={styles.sellerMarker}>
-                  <Ionicons name="business" size={20} color="#FFFFFF" />
-                </View>
-              </Marker>
-
-              {/* Buyers' positions */}
-              {MOCK_BUYERS.map((buyer) => (
-                <Marker
-                  key={buyer.id}
-                  coordinate={{
-                    latitude: buyer.latitude,
-                    longitude: buyer.longitude,
-                  }}
-                  onPress={() => handleBuyerMarkerPress(buyer)}
-                >
-                  <View style={styles.buyerMarker}>
-                    <Ionicons name="person" size={16} color="#FFFFFF" />
-                  </View>
-                </Marker>
-              ))}
-            </MapView>
-
-            {selectedBuyer && (
-              <View style={styles.buyerPreview}>
-                <Image
-                  source={{ uri: selectedBuyer.avatar }}
-                  style={styles.buyerAvatar}
-                  accessibilityLabel={`${selectedBuyer.name} avatar`}
-                />
-
-                <View style={styles.buyerInfo}>
-                  <Text style={styles.buyerName}>{selectedBuyer.name}</Text>
-                  <View style={styles.buyerMetaRow}>
-                    <Text style={styles.buyerDistance}>{selectedBuyer.distance}</Text>
-                    <Text style={styles.buyerLastOrder}>Last order: {formatDate(selectedBuyer.lastOrder)}</Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.viewProfileButton}
-                  onPress={navigateToBuyerProfile}
-                  accessibilityLabel="View profile button"
-                >
-                  <Text style={styles.viewProfileText}>View Profile</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   )
 }
@@ -233,10 +208,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
+  overlayContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+  },
   header: {
     padding: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "rgba(240, 240, 240, 0.5)",
   },
   title: {
     fontSize: fontSize.xl,
@@ -247,8 +230,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "rgba(240, 240, 240, 0.5)",
   },
   businessStatusLabel: {
     fontSize: fontSize.lg,
@@ -266,7 +250,7 @@ const styles = StyleSheet.create({
   locationSharingContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F5E9",
+    backgroundColor: 'rgba(232, 245, 233, 0.9)',
     padding: spacing.md,
     marginHorizontal: spacing.lg,
     marginVertical: spacing.md,
@@ -276,7 +260,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: spacing.md,
@@ -294,45 +278,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: theme.colors.placeholder,
   },
-  statsContainer: {
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: "bold",
-    marginBottom: spacing.md,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  statCard: {
-    width: "30%",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
-    marginBottom: spacing.xs,
-  },
-  statLabel: {
-    fontSize: fontSize.xs,
-    color: theme.colors.placeholder,
-  },
   mapContainer: {
-    padding: spacing.lg,
-  },
-  mapWrapper: {
-    borderRadius: 12,
-    overflow: "hidden",
-    height: 300,
+    flex: 1,
   },
   map: {
     ...StyleSheet.absoluteFillObject,

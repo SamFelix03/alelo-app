@@ -154,7 +154,7 @@ const ProfileScreen = () => {
           <View style={styles.accountInfoItem}>
             <Text style={styles.accountInfoLabel}>Phone Number</Text>
             <Text style={styles.accountInfoValue}>{userInfo?.phoneNumber || ""}</Text>
-          </View>
+        </View>
           <View style={styles.accountInfoItem}>
             <Text style={styles.accountInfoLabel}>Account Type</Text>
             <Text style={styles.accountInfoValue}>{userInfo?.userType === 'buyer' ? 'Customer' : 'Business'}</Text>
@@ -170,42 +170,42 @@ const ProfileScreen = () => {
               onPress={() => handleToggleNotification("orderUpdates")}
             >
               <Text style={styles.settingText}>Order Updates</Text>
-              <Switch
-                value={notifications.orderUpdates}
-                onValueChange={() => handleToggleNotification("orderUpdates")}
-                trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-                thumbColor={notifications.orderUpdates ? theme.colors.primary : "#F5F5F5"}
-              />
+            <Switch
+              value={notifications.orderUpdates}
+              onValueChange={() => handleToggleNotification("orderUpdates")}
+              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+              thumbColor={notifications.orderUpdates ? theme.colors.primary : "#F5F5F5"}
+            />
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={styles.settingItem}
               onPress={() => handleToggleNotification("promotions")}
             >
               <Text style={styles.settingText}>Promotions & Deals</Text>
-              <Switch
-                value={notifications.promotions}
-                onValueChange={() => handleToggleNotification("promotions")}
-                trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-                thumbColor={notifications.promotions ? theme.colors.primary : "#F5F5F5"}
-              />
+            <Switch
+              value={notifications.promotions}
+              onValueChange={() => handleToggleNotification("promotions")}
+              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+              thumbColor={notifications.promotions ? theme.colors.primary : "#F5F5F5"}
+            />
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={styles.settingItem}
               onPress={() => handleToggleNotification("sellerAlerts")}
             >
               <Text style={styles.settingText}>Seller Alerts</Text>
-              <Switch
-                value={notifications.sellerAlerts}
-                onValueChange={() => handleToggleNotification("sellerAlerts")}
-                trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-                thumbColor={notifications.sellerAlerts ? theme.colors.primary : "#F5F5F5"}
-              />
+            <Switch
+              value={notifications.sellerAlerts}
+              onValueChange={() => handleToggleNotification("sellerAlerts")}
+              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
+              thumbColor={notifications.sellerAlerts ? theme.colors.primary : "#F5F5F5"}
+            />
             </TouchableOpacity>
           </View>
         </View>
-        
+
         {/* Logout Button */}
         <View style={styles.logoutContainer}>
           <TouchableOpacity
@@ -218,10 +218,10 @@ const ProfileScreen = () => {
             ) : (
               <>
                 <Ionicons name="log-out-outline" size={20} color="#E53935" style={styles.logoutIcon} />
-                <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>Logout</Text>
               </>
             )}
-          </TouchableOpacity>
+        </TouchableOpacity>
         </View>
 
         <View style={styles.versionContainer}>

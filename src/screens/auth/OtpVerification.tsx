@@ -144,7 +144,7 @@ const OtpVerification = () => {
     // Mock verification - all 4-digit codes are accepted
     setTimeout(async () => {
       setLoading(false)
-      
+
       if (existingUser && existingUserType) {
         // If this is an existing user, store their credentials and they will be auto-redirected
         const success = await storeUserData(phoneNumber, existingUserType);
@@ -164,7 +164,7 @@ const OtpVerification = () => {
         const success = await createUser(phoneNumber, selectedRole);
         
         if (success) {
-          // Navigate to appropriate onboarding screen based on role
+      // Navigate to appropriate onboarding screen based on role
           if (selectedRole === "buyer") {
             navigation.navigate("BuyerOnboarding", { phoneNumber });
           } else {
@@ -190,7 +190,7 @@ const OtpVerification = () => {
           navigation.navigate("BuyerOnboarding", { phoneNumber });
         } else {
           navigation.navigate("SellerOnboarding", { phoneNumber });
-        }
+      }
       }
     }).catch(err => {
       setLoading(false);
@@ -247,87 +247,87 @@ const OtpVerification = () => {
             {loading && <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />}
           </View>
         ) : (
-          <View style={styles.content}>
-            <Text style={styles.title}>Verify Your Phone</Text>
-            <Text style={styles.subtitle}>
-              {otpSent
+        <View style={styles.content}>
+          <Text style={styles.title}>Verify Your Phone</Text>
+          <Text style={styles.subtitle}>
+            {otpSent
                 ? `We've sent a verification code to ${phoneNumber}`
-                : "Enter your phone number to receive a verification code"}
-            </Text>
+              : "Enter your phone number to receive a verification code"}
+          </Text>
 
-            {!otpSent ? (
-              <>
-                <View style={styles.phoneInputContainer}>
-                  <View style={styles.countryCodeContainer}>
-                    <Text style={styles.countryCode}>{countryCode}</Text>
-                  </View>
-                  <TextInput
-                    style={styles.phoneInput}
-                    placeholder="Phone Number"
-                    keyboardType="phone-pad"
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    maxLength={10}
-                    accessibilityLabel="Phone number input"
-                  />
+          {!otpSent ? (
+            <>
+              <View style={styles.phoneInputContainer}>
+                <View style={styles.countryCodeContainer}>
+                  <Text style={styles.countryCode}>{countryCode}</Text>
                 </View>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="Phone Number"
+                  keyboardType="phone-pad"
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  maxLength={10}
+                  accessibilityLabel="Phone number input"
+                />
+              </View>
 
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-                <TouchableOpacity
-                  style={[styles.button, loading && styles.buttonDisabled]}
-                  onPress={handleSendOtp}
-                  disabled={loading}
-                  accessibilityLabel="Send OTP button"
-                >
-                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={styles.otpContainer}>
-                  {otp.map((digit, index) => (
-                    <TextInput
-                      key={index}
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleSendOtp}
+                disabled={loading}
+                accessibilityLabel="Send OTP button"
+              >
+                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Send OTP</Text>}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.otpContainer}>
+                {otp.map((digit, index) => (
+                  <TextInput
+                    key={index}
                       ref={(input) => {
                         otpInputs.current[index] = input;
                       }}
-                      style={styles.otpInput}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      value={digit}
-                      onChangeText={(text) => handleOtpChange(text, index)}
-                      accessibilityLabel={`OTP digit ${index + 1}`}
-                    />
-                  ))}
-                </View>
+                    style={styles.otpInput}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    value={digit}
+                    onChangeText={(text) => handleOtpChange(text, index)}
+                    accessibilityLabel={`OTP digit ${index + 1}`}
+                  />
+                ))}
+              </View>
 
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-                <TouchableOpacity
-                  style={[styles.button, loading && styles.buttonDisabled]}
-                  onPress={handleVerifyOtp}
-                  disabled={loading}
-                  accessibilityLabel="Verify OTP button"
-                >
-                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Verify</Text>}
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleVerifyOtp}
+                disabled={loading}
+                accessibilityLabel="Verify OTP button"
+              >
+                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Verify</Text>}
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.resendButton}
-                  onPress={handleResendOtp}
-                  disabled={loading}
-                  accessibilityLabel="Resend OTP button"
-                >
-                  <Text style={styles.resendText}>Didn't receive code? Resend</Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.resendButton}
+                onPress={handleResendOtp}
+                disabled={loading}
+                accessibilityLabel="Resend OTP button"
+              >
+                <Text style={styles.resendText}>Didn't receive code? Resend</Text>
+              </TouchableOpacity>
                 
                 <Text style={styles.mockHint}>
                   For demo purposes, any 4-digit code will work
                 </Text>
-              </>
-            )}
-          </View>
+            </>
+          )}
+        </View>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>

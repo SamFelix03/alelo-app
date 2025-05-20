@@ -57,7 +57,7 @@ const BuyerTabs = () => {
           tabBarItemStyle: styles.centerTabItem,
         }}
       />
-      <Tab.Screen 
+      <Tab.Screen
         name="Cart" 
         component={OrdersScreen}
         options={{

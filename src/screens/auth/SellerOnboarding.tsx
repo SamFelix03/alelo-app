@@ -110,7 +110,7 @@ const SellerOnboarding = () => {
     }
     
     setLoading(true)
-    
+
     try {
       // Convert location to PostGIS format if it exists
       let locationGeoJSON = null
@@ -155,30 +155,30 @@ const SellerOnboarding = () => {
     }
   }
 
-  return (
+        return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <TouchableOpacity 
+            <TouchableOpacity
           style={styles.backButton} 
           onPress={() => navigation.goBack()} 
           accessibilityLabel="Back button"
         >
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-      
+            </TouchableOpacity>
+
         <Text style={styles.title}>Set Up Your Business</Text>
         <Text style={styles.subtitle}>Please provide the following information</Text>
         
         {/* Business Name Input - matches 'name' field */}
         <Text style={styles.inputLabel}>Business Name</Text>
-        <TextInput
-          placeholder="Business Name"
-          value={name}
-          onChangeText={setName}
+            <TextInput
+              placeholder="Business Name"
+              value={name}
+              onChangeText={setName}
           style={styles.input}
-          accessibilityLabel="Business name input"
-        />
-        
+              accessibilityLabel="Business name input"
+            />
+
         {/* Address Input - matches 'address' field */}
         <Text style={styles.inputLabel}>Business Address</Text>
         <TextInput
@@ -192,7 +192,7 @@ const SellerOnboarding = () => {
         
         {/* Location Picker - matches 'current_location' field */}
         <Text style={styles.inputLabel}>Business Location</Text>
-        <TouchableOpacity 
+                  <TouchableOpacity
           style={styles.locationButton}
           onPress={handleLocationPicker}
           accessibilityLabel="Set location button"
@@ -200,12 +200,12 @@ const SellerOnboarding = () => {
           <Ionicons name="location" size={20} color={theme.colors.primary} />
           <Text style={styles.locationButtonText}>
             {location ? "Location Selected (Tap to change)" : "Set Your Business Location"}
-          </Text>
-        </TouchableOpacity>
-        
+                    </Text>
+                  </TouchableOpacity>
+
         {/* Logo Upload - matches 'logo_url' field */}
         <Text style={styles.inputLabel}>Business Logo</Text>
-        <TouchableOpacity
+            <TouchableOpacity
           style={styles.imagePickerContainer}
           onPress={handleImagePicker}
           accessibilityLabel="Upload business logo"
@@ -216,14 +216,14 @@ const SellerOnboarding = () => {
               style={styles.logoImage}
               accessibilityLabel="Selected business logo"
             />
-          ) : (
+              ) : (
             <View style={styles.imagePlaceholder}>
               <Ionicons name="image" size={40} color={theme.colors.placeholder} />
               <Text style={styles.imagePlaceholderText}>Tap to upload logo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        
+                </View>
+              )}
+            </TouchableOpacity>
+
         {/* Business Status - matches 'is_open' field */}
         <Text style={styles.inputLabel}>Initial Business Status</Text>
         <View style={styles.switchContainer}>
@@ -236,8 +236,8 @@ const SellerOnboarding = () => {
             ios_backgroundColor="#D1D1D1"
             accessibilityLabel="Business status toggle"
           />
-        </View>
-        
+              </View>
+
         {/* Business Hours - matches 'business_hours' field */}
         <Text style={styles.inputLabel}>Business Hours</Text>
         <View style={styles.businessHoursContainer}>
@@ -253,8 +253,8 @@ const SellerOnboarding = () => {
                   ios_backgroundColor="#D1D1D1"
                   style={styles.daySwitch}
                 />
-              </View>
-              
+            </View>
+
               {businessHours[day].isOpen && (
                 <View style={styles.hoursInputRow}>
                   <TextInput
@@ -277,7 +277,7 @@ const SellerOnboarding = () => {
             </View>
           ))}
         </View>
-        
+
         <TouchableOpacity 
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleComplete}

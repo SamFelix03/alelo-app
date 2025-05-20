@@ -30,7 +30,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const AppNavigator = () => {
   return (
     <AuthProvider>
-      <NavigationContainer>
+    <NavigationContainer>
         <Stack.Navigator 
           initialRouteName="Auth"
           screenOptions={{ 
@@ -46,13 +46,13 @@ const AppNavigator = () => {
           />
 
           {/* Common screens accessible from both buyer and seller flows */}
-          <Stack.Screen name="SellerProfile" component={SellerProfile} />
-          <Stack.Screen name="ProductDetail" component={ProductDetail} />
-          <Stack.Screen name="CartScreen" component={CartScreen} />
+        <Stack.Screen name="SellerProfile" component={SellerProfile} />
+        <Stack.Screen name="ProductDetail" component={ProductDetail} />
+        <Stack.Screen name="CartScreen" component={CartScreen} />
           <Stack.Screen name="ProductForm" component={ProductForm} />
-          <Stack.Screen name="SearchScreen" component={SearchScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+        <Stack.Screen name="SearchScreen" component={SearchScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
     </AuthProvider>
   );
 };

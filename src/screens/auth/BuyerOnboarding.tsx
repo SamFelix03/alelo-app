@@ -100,7 +100,7 @@ const BuyerOnboarding = () => {
       }
       
       setLoading(false)
-      
+
       // Refresh the user profile in AuthContext to get the latest data
       await refreshUserProfile();
       
@@ -114,7 +114,7 @@ const BuyerOnboarding = () => {
     }
   }
 
-  return (
+        return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <TouchableOpacity 
@@ -164,36 +164,36 @@ const BuyerOnboarding = () => {
         
         {/* Profile Picture - matches 'profile_pic_url' field */}
         <Text style={styles.inputLabel}>Profile Picture</Text>
-        <TouchableOpacity
-          style={styles.imagePickerContainer}
-          onPress={handleImagePicker}
-          accessibilityLabel="Upload profile picture"
-        >
+            <TouchableOpacity
+              style={styles.imagePickerContainer}
+              onPress={handleImagePicker}
+              accessibilityLabel="Upload profile picture"
+            >
           {profilePicUrl ? (
-            <Image
+                <Image
               source={{ uri: profilePicUrl }}
-              style={styles.profileImage}
-              accessibilityLabel="Selected profile picture"
-            />
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
-              <Text style={styles.imagePlaceholderText}>Tap to upload</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
+                  style={styles.profileImage}
+                  accessibilityLabel="Selected profile picture"
+                />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
+                  <Text style={styles.imagePlaceholderText}>Tap to upload</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleComplete}
           disabled={loading || !name}
           accessibilityLabel="Complete registration button"
-        >
+            >
           {loading ? 
             <ActivityIndicator color="#FFFFFF" /> : 
             <Text style={styles.buttonText}>Complete Registration</Text>
           }
-        </TouchableOpacity>
+      </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   )
