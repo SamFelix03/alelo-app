@@ -222,7 +222,7 @@ const OtpVerification = () => {
         {showRoleSelection ? (
           <View style={styles.content}>
             <Text style={styles.title}>Choose Your Role</Text>
-            <Text style={styles.subtitle}>How would you like to use StreetVend?</Text>
+            <Text style={styles.subtitle}>How would you like to use Alelo?</Text>
 
             <TouchableOpacity
               style={[styles.roleButton, styles.buyerButton]}

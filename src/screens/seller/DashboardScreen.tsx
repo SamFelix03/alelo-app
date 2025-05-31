@@ -1,13 +1,14 @@
 "use client"
 
-import React from 'react'
-import { useState } from "react"
-import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView } from "react-native"
+import { useState, useEffect } from "react"
+import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView, Platform, Alert } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
-import SellerHeader from '../../components/SellerHeader'
+import { useLocation } from "../../hooks/useLocation"
+import { useAuth } from "../../context/AuthContext"
+import { supabase } from "../../lib/supabase"
 
 interface Buyer {
   id: string;
@@ -61,12 +62,116 @@ const MOCK_STATS = {
 
 const DashboardScreen = () => {
   const navigation = useNavigation()
+  const { userInfo } = useAuth()
+  const { 
+    currentLocation, 
+    isLoading: locationLoading, 
+    error: locationError, 
+    startTracking, 
+    stopTracking, 
+    updateLocation 
+  } = useLocation()
+  
   const [isOpen, setIsOpen] = useState(false)
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
-  const toggleBusinessStatus = () => {
-    setIsOpen(!isOpen)
+  // Update seller's business status in database
+  const updateBusinessStatus = async (newStatus: boolean) => {
+    if (!userInfo?.profileData?.seller_id) {
+      Alert.alert("Error", "Seller profile not found")
+      return false
+    }
+
+    try {
+      const { error } = await supabase
+        .from('sellers')
+        .update({ 
+          is_open: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('seller_id', userInfo.profileData.seller_id)
+
+      if (error) {
+        console.error('Error updating business status:', error)
+        Alert.alert("Error", "Failed to update business status")
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error updating business status:', error)
+      Alert.alert("Error", "Failed to update business status")
+      return false
+    }
   }
+
+  const toggleBusinessStatus = async () => {
+    setIsUpdatingStatus(true)
+    const newStatus = !isOpen
+
+    try {
+      if (newStatus) {
+        // Opening business - start location tracking
+        if (!currentLocation) {
+          Alert.alert(
+            "Location Required", 
+            "Please enable location services to start sharing your location with customers."
+          )
+          setIsUpdatingStatus(false)
+          return
+        }
+
+        // Update business status first
+        const statusUpdated = await updateBusinessStatus(newStatus)
+        if (!statusUpdated) {
+          setIsUpdatingStatus(false)
+          return
+        }
+
+        // Start location tracking
+        await startTracking()
+        
+        // Update initial location
+        if (userInfo?.profileData?.seller_id) {
+          await updateLocation(userInfo.profileData.seller_id)
+        }
+
+        setIsOpen(newStatus)
+        Alert.alert("Business Opened", "You are now visible to nearby customers!")
+      } else {
+        // Closing business - stop location tracking
+        const statusUpdated = await updateBusinessStatus(newStatus)
+        if (!statusUpdated) {
+          setIsUpdatingStatus(false)
+          return
+        }
+
+        stopTracking()
+        setIsOpen(newStatus)
+        Alert.alert("Business Closed", "You are no longer visible to customers.")
+      }
+    } catch (error) {
+      console.error('Error toggling business status:', error)
+      Alert.alert("Error", "Failed to update business status")
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  // Update location in database when location changes and business is open
+  useEffect(() => {
+    if (isOpen && currentLocation && userInfo?.profileData?.seller_id) {
+      updateLocation(userInfo.profileData.seller_id)
+    }
+  }, [currentLocation, isOpen, userInfo?.profileData?.seller_id])
+
+  // Show location error if any
+  useEffect(() => {
+    if (locationError) {
+      Alert.alert("Location Error", locationError.message)
+    }
+  }, [locationError])
 
   const handleBuyerMarkerPress = (buyer: Buyer) => {
     setSelectedBuyer(buyer)
@@ -92,32 +197,41 @@ const DashboardScreen = () => {
     }
   }
 
+  // Use current location or fallback to default
+  const mapRegion = currentLocation ? {
+    latitude: currentLocation.latitude,
+    longitude: currentLocation.longitude,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  } : {
+    latitude: 37.78825,
+    longitude: -122.4324,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <SellerHeader title="Dashboard" />
       <View style={styles.mapContainer}>
         <MapView
           style={styles.map}
           provider={PROVIDER_GOOGLE}
-          initialRegion={{
-            latitude: 37.78825,
-            longitude: -122.4324,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }}
+          region={mapRegion}
           showsUserLocation
         >
           {/* Seller's position (you) */}
-          <Marker
-            coordinate={{
-              latitude: 37.78825,
-              longitude: -122.4324,
-            }}
-          >
-            <View style={styles.sellerMarker}>
-              <Ionicons name="business" size={20} color="#FFFFFF" />
-            </View>
-          </Marker>
+          {currentLocation && (
+            <Marker
+              coordinate={{
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+              }}
+            >
+              <View style={[styles.sellerMarker, isOpen && styles.sellerMarkerOpen]}>
+                <Ionicons name="business" size={20} color="#FFFFFF" />
+              </View>
+            </Marker>
+          )}
 
           {/* Buyers' positions */}
           {MOCK_BUYERS.map((buyer) => (
@@ -139,6 +253,9 @@ const DashboardScreen = () => {
         <View style={styles.overlayContainer}>
           <View style={styles.header}>
             <Text style={styles.title}>Dashboard</Text>
+            {locationLoading && (
+              <Text style={styles.locationStatus}>Getting location...</Text>
+            )}
           </View>
 
           <View style={styles.businessStatusContainer}>
@@ -147,11 +264,17 @@ const DashboardScreen = () => {
               <Text style={styles.businessStatusDescription}>
                 {isOpen ? "You are visible to nearby customers" : "You are not visible to customers"}
               </Text>
+              {currentLocation && (
+                <Text style={styles.locationInfo}>
+                  Location: {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                </Text>
+              )}
             </View>
 
             <Switch
               value={isOpen}
               onValueChange={toggleBusinessStatus}
+              disabled={isUpdatingStatus}
               trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
               thumbColor={isOpen ? theme.colors.primary : "#F5F5F5"}
               ios_backgroundColor="#D1D1D1"
@@ -219,14 +342,17 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   header: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+    paddingBottom: spacing.lg,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderBottomWidth: 1,
     borderBottomColor: "rgba(240, 240, 240, 0.5)",
   },
   title: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
+    fontSize: 28,
+    fontWeight: "700",
+    color: theme.colors.text,
   },
   businessStatusContainer: {
     flexDirection: "row",
@@ -297,6 +423,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#FFFFFF",
   },
+  sellerMarkerOpen: {
+    backgroundColor: theme.colors.secondary,
+  },
   buyerMarker: {
     width: 30,
     height: 30,
@@ -361,6 +490,16 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "bold",
     fontSize: fontSize.xs,
+  },
+  locationInfo: {
+    fontSize: fontSize.xs,
+    color: theme.colors.placeholder,
+    marginTop: spacing.xs,
+  },
+  locationStatus: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+    marginTop: spacing.xs,
   },
 })
 

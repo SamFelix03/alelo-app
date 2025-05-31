@@ -1,14 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { View, StyleSheet, Text, Image, TouchableOpacity, FlatList, SafeAreaView, Alert, ActivityIndicator } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import React, { useState, useEffect } from "react"
+import { View, StyleSheet, Text, Image, TouchableOpacity, FlatList, SafeAreaView, Alert, ActivityIndicator, Platform } from "react-native"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { supabase } from "../../lib/supabase"
-import { TAB_BAR_HEIGHT } from "../../navigation/SellerTabs"
-import SellerHeader from "../../components/SellerHeader"
+import { useAuth } from "../../context/AuthContext"
 
 interface ProductTemplate {
   template_id: string;
@@ -46,13 +45,13 @@ type RootStackParamList = {
     product?: DisplayProduct;
     isTemplate?: boolean;
   } | undefined;
-  ProductTemplates: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const ProductsScreen = () => {
   const navigation = useNavigation<NavigationProp>()
+  const { userInfo } = useAuth()
   const [products, setProducts] = useState<DisplayProduct[]>([])
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
@@ -60,43 +59,44 @@ const ProductsScreen = () => {
   const [isBusinessStarted, setIsBusinessStarted] = useState(false)
   const [sellerId, setSellerId] = useState<string | null>(null)
 
-  // Fetch all available products and seller status
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Get current seller's ID and status
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+  // Function to fetch products
+  const fetchProducts = async () => {
+    try {
+      setIsLoading(true)
+      if (!userInfo) return
 
-        const { data: sellerData, error: sellerError } = await supabase
-          .from('sellers')
-          .select('seller_id, is_open')
-          .eq('phone_number', user.phone)
-          .single()
+      // Get current seller's ID and status
+      const { data: sellerData, error: sellerError } = await supabase
+        .from('sellers')
+        .select('seller_id, is_open')
+        .eq('phone_number', userInfo.phoneNumber)
+        .single()
 
-        if (sellerError) throw sellerError
+      if (sellerError) throw sellerError
 
-        setSellerId(sellerData.seller_id)
-        setIsBusinessStarted(sellerData.is_open)
+      setSellerId(sellerData.seller_id)
+      setIsBusinessStarted(sellerData.is_open)
 
-        // Get all template products
-        const { data: templates, error: templatesError } = await supabase
-          .from('product_templates')
-          .select('*')
+      // Get seller's current products (both template-based and custom)
+      const { data: sellerProducts, error: productsError } = await supabase
+        .from('seller_products')
+        .select('*')
+        .eq('seller_id', sellerData.seller_id)
+        .eq('is_active', true)
 
-        if (templatesError) throw templatesError
+      if (productsError) throw productsError
 
-        // Get seller's current products
-        const { data: sellerProducts, error: productsError } = await supabase
-          .from('seller_products')
-          .select('*')
-          .eq('seller_id', sellerData.seller_id)
-          .eq('is_active', true)
+      // Get all template products
+      const { data: templates, error: templatesError } = await supabase
+        .from('product_templates')
+        .select('*')
 
-        if (productsError) throw productsError
+      if (templatesError) throw templatesError
 
-        // Combine the data
-        const displayProducts = templates.map(template => {
+      // Combine template products with custom products
+      const displayProducts = [
+        // Template-based products
+        ...templates.map(template => {
           const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
           return {
             ...template,
@@ -106,20 +106,42 @@ const ProductsScreen = () => {
             current_price: sellerProduct?.price ?? template.suggested_price,
             is_available: sellerProduct?.is_available ?? true
           }
-        })
+        }),
+        // Custom products (those without template_id)
+        ...sellerProducts
+          .filter(sp => !sp.template_id)
+          .map(product => ({
+            template_id: product.seller_product_id, // Use seller_product_id as template_id for custom products
+            name: product.name,
+            image_url: product.image_url,
+            suggested_price: product.price,
+            price_unit: product.price_unit,
+            product_type: product.product_type,
+            description: product.description,
+            isSelected: true,
+            isInCatalog: true,
+            seller_product_id: product.seller_product_id,
+            current_price: product.price,
+            is_available: product.is_available
+          }))
+      ]
 
-        setProducts(displayProducts)
-        setSelectedProducts(displayProducts.filter(p => p.isInCatalog).map(p => p.template_id))
-      } catch (error) {
-        console.error('Error fetching data:', error)
-        Alert.alert('Error', 'Failed to load products. Please try again.')
-      } finally {
-        setIsLoading(false)
-      }
+      setProducts(displayProducts)
+      setSelectedProducts(displayProducts.filter(p => p.isInCatalog).map(p => p.template_id))
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      Alert.alert('Error', 'Failed to load products. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    fetchData()
-  }, [])
+  // Fetch products when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchProducts()
+    }, [userInfo])
+  )
 
   const handleStartBusiness = async () => {
     if (selectedProducts.length === 0) {
@@ -284,7 +306,7 @@ const ProductsScreen = () => {
   }
 
   const handleAddProduct = () => {
-    navigation.navigate('ProductTemplates')
+    navigation.navigate('ProductForm')
   }
 
   const handleEditProduct = (product: DisplayProduct) => {
@@ -320,12 +342,48 @@ const ProductsScreen = () => {
     navigation.navigate('ProductForm', { isTemplate: true })
   }
 
+  const handleDeleteProduct = async (product: DisplayProduct) => {
+    Alert.alert(
+      "Delete Product",
+      "Are you sure you want to delete this product?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoading(true)
+              const { error } = await supabase
+                .from('seller_products')
+                .delete()
+                .eq('seller_product_id', product.seller_product_id)
+
+              if (error) throw error
+
+              // Refresh products list
+              await fetchProducts()
+              Alert.alert("Success", "Product deleted successfully!")
+            } catch (error) {
+              console.error('Error deleting product:', error)
+              Alert.alert("Error", "Failed to delete product. Please try again.")
+            } finally {
+              setIsLoading(false)
+            }
+          }
+        }
+      ]
+    )
+  }
+
   const renderGridItem = ({ item }: { item: DisplayProduct }) => (
     <View style={styles.gridItem}>
       <TouchableOpacity
         style={[styles.productCard, selectedProducts.includes(item.template_id) && styles.productCardSelected]}
         onPress={() => toggleProductSelection(item.template_id)}
-        onLongPress={() => handleEditProduct(item)}
         accessibilityLabel={`${item.name} card`}
       >
         <View style={styles.imageContainer}>
@@ -348,10 +406,30 @@ const ProductsScreen = () => {
 
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.productPrice}>{item.current_price} {item.price_unit}</Text>
+          <Text style={styles.productPrice}>${item.current_price}/{item.price_unit}</Text>
 
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{item.product_type}</Text>
+          </View>
+
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => handleEditProduct(item)}
+              accessibilityLabel={`Edit ${item.name}`}
+            >
+              <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeleteProduct(item)}
+              accessibilityLabel={`Delete ${item.name}`}
+            >
+              <Ionicons name="trash" size={16} color={theme.colors.error} />
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -362,7 +440,6 @@ const ProductsScreen = () => {
     <TouchableOpacity
       style={[styles.listItem, selectedProducts.includes(item.template_id) && styles.listItemSelected]}
       onPress={() => toggleProductSelection(item.template_id)}
-      onLongPress={() => handleEditProduct(item)}
       accessibilityLabel={`${item.name} list item`}
     >
       <View style={styles.listImageContainer}>
@@ -377,10 +454,30 @@ const ProductsScreen = () => {
 
       <View style={styles.listItemInfo}>
         <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>{item.current_price} {item.price_unit}</Text>
+        <Text style={styles.productPrice}>${item.current_price}/{item.price_unit}</Text>
 
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryText}>{item.product_type}</Text>
+        </View>
+
+        <View style={styles.listActionButtons}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => handleEditProduct(item)}
+            accessibilityLabel={`Edit ${item.name}`}
+          >
+            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+            <Text style={styles.editButtonText}>Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteProduct(item)}
+            accessibilityLabel={`Delete ${item.name}`}
+          >
+            <Ionicons name="trash" size={16} color={theme.colors.error} />
+            <Text style={styles.deleteButtonText}>Delete</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -394,20 +491,6 @@ const ProductsScreen = () => {
     </TouchableOpacity>
   )
 
-  const ViewModeButton = (
-    <TouchableOpacity
-      style={styles.viewModeButton}
-      onPress={toggleViewMode}
-      accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
-    >
-      <Ionicons 
-        name={viewMode === "grid" ? "list" : "grid"} 
-        size={22} 
-        color={theme.colors.text} 
-      />
-    </TouchableOpacity>
-  )
-
   return (
     <SafeAreaView style={styles.container}>
       {isLoading ? (
@@ -416,23 +499,27 @@ const ProductsScreen = () => {
         </View>
       ) : (
         <>
-          <SellerHeader title="Products" rightElement={ViewModeButton} />
+          <View style={styles.header}>
+            <Text style={styles.title}>Products</Text>
+
+            <TouchableOpacity
+              style={styles.viewModeButton}
+              onPress={toggleViewMode}
+              accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
+            >
+              <Ionicons name={viewMode === "grid" ? "list" : "grid"} size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
 
           {!isBusinessStarted && (
             <View style={styles.startBusinessContainer}>
-              <View style={styles.startBusinessWrapper}>
-                <Text style={styles.startBusinessHint}>
-                  Select products and start your business to become visible to customers
-                </Text>
-                <TouchableOpacity
-                  style={styles.startBusinessButton}
-                  onPress={handleStartBusiness}
-                  disabled={isLoading}
-                >
-                  <Ionicons name="rocket-outline" size={20} color="#FFFFFF" style={styles.startBusinessIcon} />
-                  <Text style={styles.startBusinessText}>Start Business</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.startBusinessButton}
+                onPress={handleStartBusiness}
+                disabled={isLoading}
+              >
+                <Text style={styles.startBusinessText}>Start Business</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -457,10 +544,7 @@ const ProductsScreen = () => {
               renderItem={renderGridItem}
               keyExtractor={(item) => item.template_id}
               numColumns={2}
-              contentContainerStyle={[
-                styles.productsGrid,
-                { paddingBottom: TAB_BAR_HEIGHT + 80 } // Extra padding for FAB
-              ]}
+              contentContainerStyle={styles.productsGrid}
               removeClippedSubviews={true}
               initialNumToRender={6}
               maxToRenderPerBatch={10}
@@ -473,10 +557,7 @@ const ProductsScreen = () => {
               renderItem={renderListItem}
               keyExtractor={(item) => item.template_id}
               numColumns={1}
-              contentContainerStyle={[
-                styles.productsList,
-                { paddingBottom: TAB_BAR_HEIGHT + 80 } // Extra padding for FAB
-              ]}
+              contentContainerStyle={styles.productsList}
               removeClippedSubviews={true}
               initialNumToRender={8}
               maxToRenderPerBatch={10}
@@ -487,10 +568,10 @@ const ProductsScreen = () => {
           {/* Floating Action Button */}
           <TouchableOpacity
             style={styles.fab}
-            onPress={isBusinessStarted ? handleAddProduct : handleAddToTemplates}
-            accessibilityLabel={isBusinessStarted ? "Add product to my business" : "Add new product to catalog"}
+            onPress={handleAddProduct}
+            accessibilityLabel="Add new product"
           >
-            <Ionicons name="add" size={30} color="#FFFFFF" />
+            <Ionicons name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </>
       )}
@@ -503,50 +584,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
   viewModeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: spacing.sm,
   },
   startBusinessContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  startBusinessWrapper: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-    padding: spacing.lg,
+    paddingVertical: spacing.md,
     alignItems: 'center',
-  },
-  startBusinessHint: {
-    fontSize: fontSize.sm,
-    color: theme.colors.placeholder,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
   startBusinessButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: theme.colors.primary,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    borderRadius: 25, // Pill shape
+    borderRadius: 24,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  startBusinessIcon: {
-    marginRight: spacing.xs,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
   },
   startBusinessText: {
     color: '#FFFFFF',
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: '600',
   },
   batchActionContainer: {
@@ -719,21 +795,57 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    right: spacing.lg,
-    bottom: TAB_BAR_HEIGHT + spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    right: 16,
+    bottom: Platform.OS === 'ios' ? 100 : 72,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+    zIndex: 999,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  listActionButtons: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.xs,
+    borderRadius: 4,
+    backgroundColor: '#F0F0F0',
+    marginRight: spacing.sm,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.xs,
+    borderRadius: 4,
+    backgroundColor: '#FFF0F0',
+  },
+  editButtonText: {
+    marginLeft: 4,
+    fontSize: fontSize.sm,
+    color: theme.colors.primary,
+  },
+  deleteButtonText: {
+    marginLeft: 4,
+    fontSize: fontSize.sm,
+    color: theme.colors.error,
   },
 })
 

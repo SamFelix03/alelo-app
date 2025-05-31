@@ -1,6 +1,5 @@
 "use client"
 
-import React from 'react'
 import { useState } from "react"
 import {
   View,
@@ -12,11 +11,11 @@ import {
   SafeAreaView,
   Alert,
   ScrollView,
+  Platform,
 } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
-import SellerHeader from '../../components/SellerHeader'
 
 // Mock data for orders
 const MOCK_ORDERS = {
@@ -376,7 +375,10 @@ const OrdersScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <SellerHeader title="Orders" />
+      <View style={styles.header}>
+        <Text style={styles.title}>Orders</Text>
+      </View>
+
       <View style={styles.tabsContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <TouchableOpacity
@@ -436,6 +438,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: theme.colors.text,
   },
   tabsContainer: {
     borderBottomWidth: 1,

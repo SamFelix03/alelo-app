@@ -1,15 +1,13 @@
 "use client"
 
-import React from 'react'
 import { useState, useEffect } from "react"
-import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, ActivityIndicator, Modal, TextInput } from "react-native"
+import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, ActivityIndicator, Modal, TextInput, Platform } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import { signOut } from "../../lib/auth"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
-import SellerHeader from '../../components/SellerHeader'
 
 type NotificationSettings = {
   orderAlerts: boolean;
@@ -121,7 +119,6 @@ const SellerProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <SellerHeader title="Profile" />
       <ScrollView>
         <View style={styles.header}>
           <Text style={styles.title}>Business Profile</Text>
@@ -150,26 +147,6 @@ const SellerProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Business Status</Text>
-
-          <View style={styles.businessStatusContainer}>
-            <Text style={styles.businessStatusLabel}>Open for orders</Text>
-            <Switch
-              value={isOpen}
-              onValueChange={handleToggleBusinessStatus}
-              trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
-              thumbColor={isOpen ? theme.colors.primary : "#F5F5F5"}
-              ios_backgroundColor="#D1D1D1"
-            />
-          </View>
-
-          <Text style={styles.businessStatusInfo}>
-            {isOpen 
-              ? "Your business is currently visible to customers and can receive orders." 
-              : "Your business is currently hidden from customers and cannot receive orders."}
-          </Text>
-        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Information</Text>
@@ -200,7 +177,7 @@ const SellerProfileScreen = () => {
               />
             </TouchableOpacity>
             
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               style={styles.settingItem}
               onPress={() => handleToggleNotification("customerProximity")}
             >
@@ -211,9 +188,9 @@ const SellerProfileScreen = () => {
                 trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
                 thumbColor={notifications.customerProximity ? theme.colors.primary : "#F5F5F5"}
               />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
             
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               style={styles.settingItem}
               onPress={() => handleToggleNotification("promotions")}
             >
@@ -224,7 +201,7 @@ const SellerProfileScreen = () => {
                 trackColor={{ false: "#D1D1D1", true: "#E8F5E9" }}
                 thumbColor={notifications.promotions ? theme.colors.primary : "#F5F5F5"}
               />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
@@ -311,13 +288,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   header: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
   title: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
+    fontSize: 28,
+    fontWeight: "700",
+    color: theme.colors.text,
   },
   profileSection: {
     flexDirection: "row",

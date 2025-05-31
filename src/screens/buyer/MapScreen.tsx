@@ -1,13 +1,16 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { View, StyleSheet, Text, TouchableOpacity, Animated, Dimensions, Image, Platform } from "react-native"
+import { useState, useRef, useEffect } from "react"
+import { View, StyleSheet, Text, TouchableOpacity, Animated, Dimensions, Image, Platform, Alert } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
 import Slider from "@react-native-community/slider"
+import { useLocation } from "../../hooks/useLocation"
+import { supabase } from "../../lib/supabase"
+import { calculateDistance, formatDistance } from "../../lib/locationService"
 
 // Type definitions for the navigation and data
 type RootStackParamList = {
@@ -19,53 +22,16 @@ type MapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Types for the data models
 type Seller = {
-  id: string;
+  seller_id: string;
   name: string;
-  logo: string;
+  logo_url: string;
   latitude: number;
   longitude: number;
   distance: string;
-  rating: number;
-  isOpen: boolean;
-  lastActive: Date;
+  is_open: boolean;
+  updated_at: string;
+  address?: string;
 };
-
-// Mock data for sellers
-const MOCK_SELLERS: Seller[] = [
-  {
-    id: "1",
-    name: "Fresh Veggies",
-    logo: "https://via.placeholder.com/50?text=FV",
-    latitude: 37.78825,
-    longitude: -122.4324,
-    distance: "0.5 km",
-    rating: 4.8,
-    isOpen: true,
-    lastActive: new Date(),
-  },
-  {
-    id: "2",
-    name: "Fruit Paradise",
-    logo: "https://via.placeholder.com/50?text=FP",
-    latitude: 37.78925,
-    longitude: -122.4344,
-    distance: "0.8 km",
-    rating: 4.5,
-    isOpen: true,
-    lastActive: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
-  },
-  {
-    id: "3",
-    name: "Bakery on Wheels",
-    logo: "https://via.placeholder.com/50?text=BW",
-    latitude: 37.78725,
-    longitude: -122.4314,
-    distance: "1.2 km",
-    rating: 4.2,
-    isOpen: false,
-    lastActive: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
-  },
-]
 
 const { width, height } = Dimensions.get("window")
 const ASPECT_RATIO = width / height
@@ -75,22 +41,130 @@ const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO
 const MapScreen = () => {
   const navigation = useNavigation<MapScreenNavigationProp>()
   const mapRef = useRef<MapView | null>(null)
+  const { currentLocation, refreshLocation } = useLocation()
+  
   const [region, setRegion] = useState({
     latitude: 37.78825,
     longitude: -122.4324,
     latitudeDelta: LATITUDE_DELTA,
     longitudeDelta: LONGITUDE_DELTA,
   })
+  const [sellers, setSellers] = useState<Seller[]>([])
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({
-    showOpenOnly: false,
+    showOpenOnly: true,
     showLikedOnly: false,
     radius: 5, // km
   })
+  const [isLoading, setIsLoading] = useState(false)
 
   const bottomSheetHeight = useRef(new Animated.Value(0)).current
   const filtersHeight = useRef(new Animated.Value(0)).current
+
+  // Fetch nearby sellers from database
+  const fetchNearbySellers = async () => {
+    if (!currentLocation) {
+      console.log('No current location available')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // Use the PostGIS function to find nearby sellers
+      const { data, error } = await supabase
+        .rpc('find_nearby_sellers', {
+          buyer_lat: currentLocation.latitude,
+          buyer_lng: currentLocation.longitude,
+          radius_km: filters.radius
+        })
+
+      if (error) {
+        console.error('Error fetching nearby sellers:', error)
+        Alert.alert('Error', 'Failed to fetch nearby sellers')
+        return
+      }
+
+      if (data) {
+        // Transform the data and calculate distances
+        const transformedSellers: Seller[] = data.map((seller: any) => {
+          const distance = calculateDistance(
+            currentLocation,
+            { latitude: seller.latitude, longitude: seller.longitude }
+          )
+          
+          return {
+            seller_id: seller.seller_id,
+            name: seller.name,
+            logo_url: seller.logo_url || "https://via.placeholder.com/50?text=" + seller.name.charAt(0),
+            latitude: seller.latitude,
+            longitude: seller.longitude,
+            distance: formatDistance(distance),
+            is_open: seller.is_open,
+            updated_at: seller.updated_at,
+            address: seller.address,
+          }
+        })
+
+        // Apply filters
+        let filteredSellers = transformedSellers
+        if (filters.showOpenOnly) {
+          filteredSellers = filteredSellers.filter(seller => seller.is_open)
+        }
+
+        setSellers(filteredSellers)
+      }
+    } catch (error) {
+      console.error('Error in fetchNearbySellers:', error)
+      Alert.alert('Error', 'Failed to fetch nearby sellers')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Set up real-time subscription for seller updates
+  useEffect(() => {
+    if (!currentLocation) return
+
+    // Initial fetch
+    fetchNearbySellers()
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('seller-location-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sellers'
+        },
+        (payload) => {
+          console.log('Seller update received:', payload)
+          // Refetch sellers when any seller data changes
+          fetchNearbySellers()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [currentLocation, filters.radius, filters.showOpenOnly])
+
+  // Update region when current location changes
+  useEffect(() => {
+    if (currentLocation) {
+      const newRegion = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: LATITUDE_DELTA,
+        longitudeDelta: LONGITUDE_DELTA,
+      }
+      setRegion(newRegion)
+      mapRef.current?.animateToRegion(newRegion, 1000)
+    }
+  }, [currentLocation])
 
   const navigateToSearch = () => {
     navigation.navigate("SearchScreen");
@@ -139,15 +213,23 @@ const MapScreen = () => {
     }
   }
 
-  const handleRefresh = () => {
-    // In a real app, this would refresh the seller data
-    // For this example, we'll just show a console log
-    console.log("Refreshing seller data...")
+  const handleRefresh = async () => {
+    await refreshLocation()
+    await fetchNearbySellers()
   }
 
-  const isSellerActive = (lastActive: Date): boolean => {
+  const isSellerActive = (updatedAt: string): boolean => {
+    const lastUpdate = new Date(updatedAt)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
-    return lastActive > fiveMinutesAgo
+    return lastUpdate > fiveMinutesAgo
+  }
+
+  const handleFilterChange = (newFilters: typeof filters) => {
+    setFilters(newFilters)
+    // Refetch with new filters
+    setTimeout(() => {
+      fetchNearbySellers()
+    }, 100)
   }
 
   return (
@@ -156,14 +238,14 @@ const MapScreen = () => {
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_GOOGLE}
-        initialRegion={region}
+        region={region}
         onRegionChangeComplete={setRegion}
         showsUserLocation
         showsMyLocationButton
       >
-        {MOCK_SELLERS.map((seller) => (
+        {sellers.map((seller) => (
           <Marker
-            key={seller.id}
+            key={seller.seller_id}
             coordinate={{
               latitude: seller.latitude,
               longitude: seller.longitude,
@@ -173,13 +255,13 @@ const MapScreen = () => {
             <View
               style={[
                 styles.markerContainer,
-                !seller.isOpen && styles.markerContainerClosed,
-                isSellerActive(seller.lastActive) && styles.markerContainerActive,
+                !seller.is_open && styles.markerContainerClosed,
+                isSellerActive(seller.updated_at) && styles.markerContainerActive,
               ]}
             >
               <Image
-                source={{ uri: seller.logo }}
-                style={[styles.markerImage, !seller.isOpen && styles.markerImageClosed]}
+                source={{ uri: seller.logo_url }}
+                style={[styles.markerImage, !seller.is_open && styles.markerImageClosed]}
                 accessibilityLabel={`${seller.name} marker`}
               />
             </View>
@@ -205,7 +287,7 @@ const MapScreen = () => {
           <Text style={styles.filterLabel}>Show Open Sellers Only</Text>
           <TouchableOpacity
             style={[styles.toggleButton, filters.showOpenOnly && styles.toggleButtonActive]}
-            onPress={() => setFilters({ ...filters, showOpenOnly: !filters.showOpenOnly })}
+            onPress={() => handleFilterChange({ ...filters, showOpenOnly: !filters.showOpenOnly })}
             accessibilityLabel="Toggle show open sellers only"
           >
             <View style={[styles.toggleCircle, filters.showOpenOnly && styles.toggleCircleActive]} />
@@ -216,7 +298,7 @@ const MapScreen = () => {
           <Text style={styles.filterLabel}>Show Liked Sellers Only</Text>
           <TouchableOpacity
             style={[styles.toggleButton, filters.showLikedOnly && styles.toggleButtonActive]}
-            onPress={() => setFilters({ ...filters, showLikedOnly: !filters.showLikedOnly })}
+            onPress={() => handleFilterChange({ ...filters, showLikedOnly: !filters.showLikedOnly })}
             accessibilityLabel="Toggle show liked sellers only"
           >
             <View style={[styles.toggleCircle, filters.showLikedOnly && styles.toggleCircleActive]} />
@@ -230,7 +312,7 @@ const MapScreen = () => {
           maximumValue={10}
           step={1}
           value={filters.radius}
-          onValueChange={(value) => setFilters({ ...filters, radius: value })}
+          onValueChange={(value) => handleFilterChange({ ...filters, radius: value })}
           minimumTrackTintColor={theme.colors.primary}
           maximumTrackTintColor={theme.colors.disabled}
           thumbTintColor={theme.colors.primary}
@@ -238,9 +320,21 @@ const MapScreen = () => {
         />
       </Animated.View>
 
-      <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh} accessibilityLabel="Refresh button">
+      <TouchableOpacity 
+        style={[styles.refreshButton, isLoading && styles.refreshButtonLoading]} 
+        onPress={handleRefresh} 
+        disabled={isLoading}
+        accessibilityLabel="Refresh button"
+      >
         <Ionicons name="refresh" size={24} color="#FFFFFF" />
       </TouchableOpacity>
+
+      {sellers.length === 0 && !isLoading && currentLocation && (
+        <View style={styles.noSellersContainer}>
+          <Text style={styles.noSellersText}>No sellers found in your area</Text>
+          <Text style={styles.noSellersSubtext}>Try increasing the search radius</Text>
+        </View>
+      )}
 
       <Animated.View style={[styles.bottomSheet, { height: bottomSheetHeight }]}>
         {selectedSeller && (
@@ -251,7 +345,7 @@ const MapScreen = () => {
 
             <View style={styles.sellerInfo}>
               <Image
-                source={{ uri: selectedSeller.logo }}
+                source={{ uri: selectedSeller.logo_url }}
                 style={styles.sellerLogo}
                 accessibilityLabel={`${selectedSeller.name} logo`}
               />
@@ -260,16 +354,10 @@ const MapScreen = () => {
                 <Text style={styles.sellerName}>{selectedSeller.name}</Text>
                 <View style={styles.sellerMetaRow}>
                   <Text style={styles.sellerDistance}>{selectedSeller.distance}</Text>
-                  {selectedSeller.rating && (
-                    <View style={styles.ratingContainer}>
-                      <Ionicons name="star" size={14} color="#FFD700" />
-                      <Text style={styles.ratingText}>{selectedSeller.rating}</Text>
-                    </View>
-                  )}
                 </View>
-                <View style={[styles.statusBadge, selectedSeller.isOpen ? styles.openBadge : styles.closedBadge]}>
-                  <Text style={[styles.statusText, selectedSeller.isOpen ? styles.openText : styles.closedText]}>
-                    {selectedSeller.isOpen ? "Open" : "Closed"}
+                <View style={[styles.statusBadge, selectedSeller.is_open ? styles.openBadge : styles.closedBadge]}>
+                  <Text style={[styles.statusText, selectedSeller.is_open ? styles.openText : styles.closedText]}>
+                    {selectedSeller.is_open ? "Open" : "Closed"}
                   </Text>
                 </View>
               </View>
@@ -410,6 +498,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  refreshButtonLoading: {
+    backgroundColor: theme.colors.disabled,
+  },
   markerContainer: {
     width: 40,
     height: 40,
@@ -494,14 +585,6 @@ const styles = StyleSheet.create({
     color: theme.colors.placeholder,
     marginRight: spacing.md,
   },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ratingText: {
-    fontSize: fontSize.sm,
-    marginLeft: 2,
-  },
   statusBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
@@ -534,6 +617,20 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "bold",
     fontSize: fontSize.sm,
+  },
+  noSellersContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  noSellersText: {
+    fontSize: fontSize.lg,
+    fontWeight: "bold",
+    marginBottom: spacing.sm,
+  },
+  noSellersSubtext: {
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
   },
 })
 

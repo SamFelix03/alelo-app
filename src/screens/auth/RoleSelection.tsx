@@ -73,7 +73,7 @@ const RoleSelection = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.logoContainer}>
         <Image source={{ uri: "https://via.placeholder.com/150" }} style={styles.logo} accessibilityLabel="App logo" />
-        <Text style={styles.title}>Welcome to StreetVend</Text>
+        <Text style={styles.title}>Alelo</Text>
         <Text style={styles.subtitle}>Connect with local vendors in real-time</Text>
       </View>
 

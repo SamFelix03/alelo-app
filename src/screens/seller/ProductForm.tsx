@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   View,
   StyleSheet,
@@ -11,44 +11,32 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  StatusBar,
   Platform,
-  KeyboardAvoidingView,
   ActivityIndicator,
 } from "react-native"
 import { useNavigation, useRoute } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
-import SellerHeader from "../../components/SellerHeader"
 import * as ImagePicker from 'expo-image-picker'
-import { decode } from 'base64-arraybuffer'
 import { supabase } from "../../lib/supabase"
+import { decode } from 'base64-arraybuffer'
 import { useAuth } from "../../context/AuthContext"
 
-// Types based on schema
-type ProductType = 'fruits' | 'vegetables' | 'prepared_food' | 'beverages' | 'crafts' | 'other'
-type PriceUnit = 'kg' | 'g' | 'lb' | 'oz' | 'dozen' | 'piece' | 'bunch' | 'liter' | 'ml'
-
-interface SellerProduct {
-  seller_product_id: string
-  seller_id: string
-  template_id: string | null
-  name: string
-  description: string | null
-  image_url: string | null
-  price: number
-  price_unit: PriceUnit
-  product_type: ProductType
-  is_available: boolean
-  is_active: boolean
-}
-
 interface RouteParams {
-  product?: SellerProduct
+  product?: {
+    seller_product_id?: string;
+    name: string;
+    price: string;
+    price_unit: string;
+    product_type: string;
+    image_url: string | null;
+    description?: string;
+  };
 }
 
-const PRODUCT_TYPES: ProductType[] = ['fruits', 'vegetables', 'prepared_food', 'beverages', 'crafts', 'other']
-const PRICE_UNITS: PriceUnit[] = ['kg', 'g', 'lb', 'oz', 'dozen', 'piece', 'bunch', 'liter', 'ml']
+const CATEGORIES = ["Vegetables", "Fruits", "Bakery", "Dairy", "Meat", "Seafood", "Spices", "Other"]
+
+const UNITS = ["kg", "g", "lb", "oz", "dozen", "piece", "bunch", "liter", "ml"]
 
 const ProductForm = () => {
   const navigation = useNavigation()
@@ -57,18 +45,75 @@ const ProductForm = () => {
   const { userInfo } = useAuth()
 
   const [name, setName] = useState(product?.name || "")
-  const [description, setDescription] = useState(product?.description || "")
-  const [price, setPrice] = useState(product?.price ? product.price.toString() : "")
-  const [unit, setUnit] = useState<PriceUnit>(product?.price_unit || "kg")
-  const [productType, setProductType] = useState<ProductType>(product?.product_type || "vegetables")
-  const [image, setImage] = useState<string | null>(product?.image_url || null)
-  const [showTypePicker, setShowTypePicker] = useState(false)
+  const [price, setPrice] = useState(product?.price || "")
+  const [unit, setUnit] = useState(product?.price_unit || "kg")
+  const [category, setCategory] = useState(product?.product_type || "Vegetables")
+  const [image, setImage] = useState(product?.image_url || null)
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false)
   const [showUnitPicker, setShowUnitPicker] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [sellerId, setSellerId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
+
+  useEffect(() => {
+    // Fetch current seller's ID
+    const fetchSellerId = async () => {
+      try {
+        setIsLoading(true)
+        
+        if (!userInfo) {
+          Alert.alert('Error', 'Please log in to continue.')
+          navigation.goBack()
+          return
+        }
+
+        const { data: seller, error } = await supabase
+          .from('sellers')
+          .select('seller_id')
+          .eq('phone_number', userInfo.phoneNumber)
+          .single()
+
+        if (error) {
+          console.error('Error fetching seller ID:', error)
+          Alert.alert('Error', 'Failed to load seller information.')
+          navigation.goBack()
+          return
+        }
+
+        if (!seller) {
+          Alert.alert('Error', 'Seller profile not found.')
+          navigation.goBack()
+          return
+        }
+
+        setSellerId(seller.seller_id)
+      } catch (error) {
+        console.error('Error fetching seller ID:', error)
+        Alert.alert('Error', 'Failed to load seller information.')
+        navigation.goBack()
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchSellerId()
+  }, [navigation, userInfo])
 
   const handleImagePicker = async () => {
+    if (!sellerId) {
+      Alert.alert("Error", "Please wait for seller information to load.")
+      return
+    }
+
     try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Please allow access to your photo library to upload images.")
+        return
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
         aspect: [1, 1],
@@ -77,59 +122,56 @@ const ProductForm = () => {
       })
 
       if (!result.canceled && result.assets[0]) {
-        setImage(result.assets[0].uri)
+        setIsUploading(true)
+        try {
+          const asset = result.assets[0]
+          
+          // Generate a unique file path using seller ID and timestamp
+          const ext = asset.uri.substring(asset.uri.lastIndexOf(".") + 1)
+          const fileName = `${sellerId}/${Date.now()}.${ext}`
+
+          // Upload the image
+          const { data, error } = await supabase.storage
+            .from('product_images')
+            .upload(fileName, decode(asset.base64!), {
+              contentType: `image/${ext}`,
+              cacheControl: '3600',
+              upsert: false
+            })
+
+          if (error) throw error
+
+          // Get the public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('product_images')
+            .getPublicUrl(fileName)
+
+          setImage(publicUrl)
+        } catch (error) {
+          console.error('Error uploading image:', error)
+          Alert.alert('Error', 'Failed to upload image. Please try again.')
+        }
+        setIsUploading(false)
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick image")
-    }
-  }
-
-  const uploadImage = async (uri: string): Promise<string | null> => {
-    try {
-      if (!userInfo?.phoneNumber) {
-        throw new Error('User not authenticated')
-      }
-
-      // Get the file extension
-      const ext = uri.substring(uri.lastIndexOf(".") + 1)
-      
-      // Create a unique file name using phone number instead of user id
-      const fileName = `${userInfo.phoneNumber}/${Date.now()}.${ext}`
-      
-      // Fetch the image data
-      const response = await fetch(uri)
-      const blob = await response.blob()
-      
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('product_images')
-        .upload(fileName, blob, {
-          contentType: `image/${ext}`,
-          upsert: true
-        })
-
-      if (error) throw error
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('product_images')
-        .getPublicUrl(fileName)
-
-      return publicUrl
-    } catch (error) {
-      console.error('Error uploading image:', error)
-      return null
+      console.error('Error picking image:', error)
+      Alert.alert('Error', 'Failed to pick image. Please try again.')
     }
   }
 
   const handleSave = async () => {
+    if (!sellerId) {
+      Alert.alert("Error", "Seller information not loaded. Please try again.")
+      return
+    }
+
     if (!name.trim()) {
       Alert.alert("Error", "Please enter a product name.")
       return
     }
 
-    if (!price.trim()) {
-      Alert.alert("Error", "Please enter a product price.")
+    if (!price.trim() || isNaN(Number(price)) || Number(price) <= 0) {
+      Alert.alert("Error", "Please enter a valid price.")
       return
     }
 
@@ -138,257 +180,258 @@ const ProductForm = () => {
       return
     }
 
-    if (!userInfo?.phoneNumber) {
-      Alert.alert("Error", "You must be logged in to save products.")
-      return
-    }
-
-    setIsLoading(true)
-
+    setIsSaving(true)
     try {
-      // Upload image if it's a new image (not a URL)
-      let imageUrl = image
-      if (image && !image.startsWith('http')) {
-        const uploadedUrl = await uploadImage(image)
-        if (!uploadedUrl) throw new Error('Failed to upload image')
-        imageUrl = uploadedUrl
-      }
-
-      // Get seller_id from userInfo
-      const { data: sellerData, error: sellerError } = await supabase
-        .from('sellers')
-        .select('seller_id')
-        .eq('phone_number', userInfo.phoneNumber)
-        .single()
-
-      if (sellerError || !sellerData) {
-        throw new Error('Failed to get seller information')
-      }
-
       const productData = {
-        name,
-        description,
-        image_url: imageUrl,
-        price: parseFloat(price),
+        seller_id: sellerId,
+        name: name.trim(),
+        price: Number(price),
         price_unit: unit,
-        product_type: productType,
+        product_type: category.toLowerCase(),
+        image_url: image,
         is_available: true,
         is_active: true,
-        seller_id: sellerData.seller_id,
-        ...(product ? { seller_product_id: product.seller_product_id } : {})
+        description: null, // Optional field
+        template_id: null // Since this is a custom product
       }
 
-      if (product) {
+      let result;
+      if (product?.seller_product_id) {
         // Update existing product
-        const { error } = await supabase
+        result = await supabase
           .from('seller_products')
           .update(productData)
           .eq('seller_product_id', product.seller_product_id)
-
-        if (error) throw error
+          .select()
+          .single()
       } else {
-        // Insert new product
-        const { error } = await supabase
+        // Add new product
+        result = await supabase
           .from('seller_products')
-          .insert([productData])
-
-        if (error) throw error
+          .insert(productData)
+          .select()
+          .single()
       }
 
+      if (result.error) throw result.error
+
       Alert.alert(
-        "Success",
+        "Success", 
         `Product ${product ? "updated" : "added"} successfully!`,
         [{ text: "OK", onPress: () => navigation.goBack() }]
       )
     } catch (error) {
       console.error('Error saving product:', error)
-      Alert.alert("Error", "Failed to save product. Please try again.")
+      Alert.alert('Error', 'Failed to save product. Please try again.')
     } finally {
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
   return (
-    <>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="transparent"
-        translucent
-      />
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView 
-          style={styles.container}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Back button"
         >
-          <SellerHeader 
-            title={product ? "Edit Product" : "Add Product"}
-            onBack={() => navigation.goBack()}
-          />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
 
-          <ScrollView 
-            style={styles.content}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            removeClippedSubviews={Platform.OS === 'android'}
+        <Text style={styles.title}>{product ? "Edit Product" : "Add Product"}</Text>
+
+        <View style={styles.headerRight} />
+      </View>
+
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading seller information...</Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content}>
+          <TouchableOpacity
+            style={styles.imagePickerContainer}
+            onPress={handleImagePicker}
+            disabled={isUploading || !sellerId}
+            accessibilityLabel="Upload product image"
           >
-            <TouchableOpacity
-              style={styles.imagePickerContainer}
-              onPress={handleImagePicker}
-              accessibilityLabel="Upload product image"
-            >
-              {image ? (
+            {image ? (
+              <>
                 <Image source={{ uri: image }} style={styles.productImage} accessibilityLabel="Selected product image" />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
-                  <Text style={styles.imagePlaceholderText}>Tap to upload</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Product Name</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Enter product name"
-                accessibilityLabel="Product name input"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={description || ''}
-                onChangeText={setDescription}
-                placeholder="Enter product description"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                accessibilityLabel="Product description input"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Price</Text>
-              <View style={styles.priceContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.priceInput}
-                  value={price}
-                  onChangeText={setPrice}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  accessibilityLabel="Price input"
-                />
-                <Text style={styles.pricePerText}>per</Text>
-                <TouchableOpacity
-                  style={styles.unitSelector}
-                  onPress={() => setShowUnitPicker(!showUnitPicker)}
-                  accessibilityLabel="Unit selector"
-                >
-                  <Text style={styles.unitText}>{unit}</Text>
-                  <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {showUnitPicker && (
-              <View style={styles.pickerContainer}>
-                {PRICE_UNITS.map((unitOption) => (
-                  <TouchableOpacity
-                    key={unitOption}
-                    style={[styles.pickerItem, unit === unitOption && styles.pickerItemSelected]}
-                    onPress={() => {
-                      setUnit(unitOption)
-                      setShowUnitPicker(false)
-                    }}
-                    accessibilityLabel={`${unitOption} option`}
-                  >
-                    <Text style={[styles.pickerItemText, unit === unitOption && styles.pickerItemTextSelected]}>
-                      {unitOption}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {isUploading && (
+                  <View style={styles.uploadingOverlay}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
+                <Text style={styles.imagePlaceholderText}>
+                  {isUploading ? "Uploading..." : "Tap to upload"}
+                </Text>
               </View>
             )}
+          </TouchableOpacity>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Product Type</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Product Name</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Enter product name"
+              accessibilityLabel="Product name input"
+              editable={!isLoading}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Price</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.currencySymbol}>$</Text>
+              <TextInput
+                style={styles.priceInput}
+                value={price}
+                onChangeText={setPrice}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                accessibilityLabel="Price input"
+                editable={!isLoading}
+              />
+              <Text style={styles.pricePerText}>per</Text>
               <TouchableOpacity
-                style={styles.typeSelector}
-                onPress={() => setShowTypePicker(!showTypePicker)}
-                accessibilityLabel="Product type selector"
+                style={styles.unitSelector}
+                onPress={() => setShowUnitPicker(!showUnitPicker)}
+                disabled={isLoading}
+                accessibilityLabel="Unit selector"
               >
-                <Text style={styles.typeText}>{productType.replace('_', ' ')}</Text>
+                <Text style={styles.unitText}>{unit}</Text>
                 <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
+          </View>
 
-            {showTypePicker && (
-              <View style={styles.pickerContainer}>
-                {PRODUCT_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.pickerItem, productType === type && styles.pickerItemSelected]}
-                    onPress={() => {
-                      setProductType(type)
-                      setShowTypePicker(false)
-                    }}
-                    accessibilityLabel={`${type.replace('_', ' ')} option`}
-                  >
-                    <Text style={[styles.pickerItemText, productType === type && styles.pickerItemTextSelected]}>
-                      {type.replace('_', ' ')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+          {showUnitPicker && (
+            <View style={styles.pickerContainer}>
+              {UNITS.map((unitOption) => (
+                <TouchableOpacity
+                  key={unitOption}
+                  style={[styles.pickerItem, unit === unitOption && styles.pickerItemSelected]}
+                  onPress={() => {
+                    setUnit(unitOption)
+                    setShowUnitPicker(false)
+                  }}
+                  disabled={isLoading}
+                  accessibilityLabel={`${unitOption} option`}
+                >
+                  <Text style={[styles.pickerItemText, unit === unitOption && styles.pickerItemTextSelected]}>
+                    {unitOption}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
-            <View style={styles.bottomPadding} />
-          </ScrollView>
-
-          <View style={styles.saveButtonContainer}>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Category</Text>
             <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleSave}
+              style={styles.categorySelector}
+              onPress={() => setShowCategoryPicker(!showCategoryPicker)}
               disabled={isLoading}
-              accessibilityLabel="Save product"
+              accessibilityLabel="Category selector"
             >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Product</Text>
-              )}
+              <Text style={styles.categoryText}>{category}</Text>
+              <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </>
+
+          {showCategoryPicker && (
+            <View style={styles.pickerContainer}>
+              {CATEGORIES.map((categoryOption) => (
+                <TouchableOpacity
+                  key={categoryOption}
+                  style={[styles.pickerItem, category === categoryOption && styles.pickerItemSelected]}
+                  onPress={() => {
+                    setCategory(categoryOption)
+                    setShowCategoryPicker(false)
+                  }}
+                  disabled={isLoading}
+                  accessibilityLabel={`${categoryOption} option`}
+                >
+                  <Text style={[styles.pickerItemText, category === categoryOption && styles.pickerItemTextSelected]}>
+                    {categoryOption}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={[
+              styles.saveButton, 
+              (isSaving || isUploading || isLoading) && styles.disabledButton
+            ]} 
+            onPress={handleSave}
+            disabled={isSaving || isUploading || isLoading}
+            accessibilityLabel="Save button"
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.saveButtonText}>Save Product</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-  },
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  content: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
-  scrollContent: {
+  backButton: {
+    padding: spacing.xs,
+  },
+  headerRight: {
+    width: 40, // Same width as backButton for balance
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
+  content: {
     padding: spacing.lg,
-    flexGrow: 1,
+    paddingBottom: spacing.xxl, // Extra padding at bottom for save button
+  },
+  saveButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: spacing.xl,
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: fontSize.md,
+    fontWeight: "bold",
   },
   imagePickerContainer: {
     alignSelf: "center",
@@ -429,10 +472,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: fontSize.md,
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
   priceContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -467,7 +506,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     marginRight: spacing.xs,
   },
-  typeSelector: {
+  categorySelector: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -476,9 +515,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: spacing.md,
   },
-  typeText: {
+  categoryText: {
     fontSize: fontSize.md,
-    textTransform: 'capitalize',
   },
   pickerContainer: {
     backgroundColor: "#F5F5F5",
@@ -497,43 +535,33 @@ const styles = StyleSheet.create({
   },
   pickerItemText: {
     fontSize: fontSize.md,
-    textTransform: 'capitalize',
   },
   pickerItemTextSelected: {
     color: "#FFFFFF",
     fontWeight: "bold",
   },
-  bottomPadding: {
-    height: 80,
-  },
-  saveButtonContainer: {
+  uploadingOverlay: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    flexDirection: "row",
+  disabledButton: {
+    opacity: 0.7,
   },
-  saveButtonText: {
-    color: "#FFFFFF",
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
     fontSize: fontSize.md,
-    fontWeight: "bold",
+    color: theme.colors.text,
   },
 })
 

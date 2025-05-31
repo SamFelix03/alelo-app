@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "StreetVend",
-    "slug": "street-vend",
+    "name": "Alelo",
+    "slug": "alelo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "main": "./App.tsx",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
