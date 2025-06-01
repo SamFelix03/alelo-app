@@ -9,19 +9,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
 
-interface ProductTemplate {
-  template_id: string;
-  name: string;
-  image_url: string | null;
-  suggested_price: number;
-  price_unit: string;
-  product_type: 'fruits' | 'vegetables' | 'prepared_food' | 'beverages' | 'crafts' | 'other';
-  description: string | null;
-}
-
-interface SellerProduct {
-  seller_product_id: string;
-  template_id: string | null;
+interface Product {
+  product_id: string;
   name: string;
   image_url: string | null;
   price: number;
@@ -29,21 +18,18 @@ interface SellerProduct {
   product_type: 'fruits' | 'vegetables' | 'prepared_food' | 'beverages' | 'crafts' | 'other';
   description: string | null;
   is_available: boolean;
-  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-interface DisplayProduct extends ProductTemplate {
+interface DisplayProduct extends Product {
   isSelected?: boolean;
-  isInCatalog?: boolean;
-  seller_product_id?: string;
-  current_price?: number;
-  is_available?: boolean;
 }
 
 type RootStackParamList = {
   ProductForm: { 
     product?: DisplayProduct;
-    isTemplate?: boolean;
+    isEdit?: boolean;
   } | undefined;
 };
 
@@ -77,57 +63,22 @@ const ProductsScreen = () => {
       setSellerId(sellerData.seller_id)
       setIsBusinessStarted(sellerData.is_open)
 
-      // Get seller's current products (both template-based and custom)
+      // Get seller's products
       const { data: sellerProducts, error: productsError } = await supabase
-        .from('seller_products')
+        .from('products')
         .select('*')
         .eq('seller_id', sellerData.seller_id)
-        .eq('is_active', true)
+        .order('created_at', { ascending: false })
 
       if (productsError) throw productsError
 
-      // Get all template products
-      const { data: templates, error: templatesError } = await supabase
-        .from('product_templates')
-        .select('*')
-
-      if (templatesError) throw templatesError
-
-      // Combine template products with custom products
-      const displayProducts = [
-        // Template-based products
-        ...templates.map(template => {
-          const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
-          return {
-            ...template,
-            isSelected: !!sellerProduct,
-            isInCatalog: !!sellerProduct,
-            seller_product_id: sellerProduct?.seller_product_id,
-            current_price: sellerProduct?.price ?? template.suggested_price,
-            is_available: sellerProduct?.is_available ?? true
-          }
-        }),
-        // Custom products (those without template_id)
-        ...sellerProducts
-          .filter(sp => !sp.template_id)
-          .map(product => ({
-            template_id: product.seller_product_id, // Use seller_product_id as template_id for custom products
-            name: product.name,
-            image_url: product.image_url,
-            suggested_price: product.price,
-            price_unit: product.price_unit,
-            product_type: product.product_type,
-            description: product.description,
-            isSelected: true,
-            isInCatalog: true,
-            seller_product_id: product.seller_product_id,
-            current_price: product.price,
-            is_available: product.is_available
-          }))
-      ]
+      const displayProducts: DisplayProduct[] = (sellerProducts || []).map(product => ({
+        ...product,
+        isSelected: false
+      }))
 
       setProducts(displayProducts)
-      setSelectedProducts(displayProducts.filter(p => p.isInCatalog).map(p => p.template_id))
+      setSelectedProducts([])
     } catch (error) {
       console.error('Error fetching data:', error)
       Alert.alert('Error', 'Failed to load products. Please try again.')
@@ -144,8 +95,8 @@ const ProductsScreen = () => {
   )
 
   const handleStartBusiness = async () => {
-    if (selectedProducts.length === 0) {
-      Alert.alert('No Products Selected', 'Please select at least one product to start your business.')
+    if (products.length === 0) {
+      Alert.alert('No Products', 'Please add at least one product to start your business.')
       return
     }
 
@@ -153,32 +104,6 @@ const ProductsScreen = () => {
       setIsLoading(true)
       
       if (!sellerId) throw new Error('No seller ID found')
-
-      // Create selected products for the seller
-      const productsToCreate = selectedProducts.map(templateId => {
-        const template = products.find(p => p.template_id === templateId)
-        if (!template) return null
-
-        return {
-          seller_id: sellerId,
-          template_id: template.template_id,
-          name: template.name,
-          description: template.description,
-          image_url: template.image_url,
-          price: template.suggested_price,
-          price_unit: template.price_unit,
-          product_type: template.product_type,
-          is_available: true,
-          is_active: true
-        }
-      }).filter(Boolean)
-
-      // Insert products into seller's catalog
-      const { error: insertError } = await supabase
-        .from('seller_products')
-        .insert(productsToCreate)
-
-      if (insertError) throw insertError
 
       // Update seller status to open
       const { error: updateError } = await supabase
@@ -191,28 +116,6 @@ const ProductsScreen = () => {
       setIsBusinessStarted(true)
       Alert.alert('Success', 'Your business is now visible to customers!')
 
-      // Refresh the product list
-      const { data: sellerProducts, error: refreshError } = await supabase
-        .from('seller_products')
-        .select('*')
-        .eq('seller_id', sellerId)
-        .eq('is_active', true)
-
-      if (refreshError) throw refreshError
-
-      // Update the display products
-      setProducts(products.map(template => {
-        const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
-        return {
-          ...template,
-          isSelected: !!sellerProduct,
-          isInCatalog: !!sellerProduct,
-          seller_product_id: sellerProduct?.seller_product_id,
-          current_price: sellerProduct?.price ?? template.suggested_price,
-          is_available: sellerProduct?.is_available ?? true
-        }
-      }))
-
     } catch (error) {
       console.error('Error starting business:', error)
       Alert.alert('Error', 'Failed to start business. Please try again.')
@@ -221,88 +124,48 @@ const ProductsScreen = () => {
     }
   }
 
-  const toggleProductSelection = async (templateId: string) => {
-    if (!isBusinessStarted) {
-      // Just toggle selection for initial setup
-      setSelectedProducts(prev => 
-        prev.includes(templateId) 
-          ? prev.filter(id => id !== templateId)
-          : [...prev, templateId]
-      )
-      return
-    }
-
-    // If business is started, we're adding/removing from catalog
-    try {
-      const product = products.find(p => p.template_id === templateId)
-      if (!product) return
-
-      if (product.isInCatalog) {
-        // Remove from catalog (soft delete)
-        const { error } = await supabase
-          .from('seller_products')
-          .update({ is_active: false })
-          .eq('seller_product_id', product.seller_product_id)
-
-        if (error) throw error
-      } else {
-        // Add to catalog
-        const { error } = await supabase
-          .from('seller_products')
-          .insert({
-            seller_id: sellerId,
-            template_id: templateId,
-            name: product.name,
-            description: product.description,
-            image_url: product.image_url,
-            price: product.suggested_price,
-            price_unit: product.price_unit,
-            product_type: product.product_type,
-            is_available: true,
-            is_active: true
-          })
-
-        if (error) throw error
-      }
-
-      // Refresh the product list
-      const { data: sellerProducts, error: refreshError } = await supabase
-        .from('seller_products')
-        .select('*')
-        .eq('seller_id', sellerId)
-        .eq('is_active', true)
-
-      if (refreshError) throw refreshError
-
-      // Update the display products
-      setProducts(products.map(template => {
-        const sellerProduct = sellerProducts?.find(sp => sp.template_id === template.template_id)
-        return {
-          ...template,
-          isSelected: !!sellerProduct,
-          isInCatalog: !!sellerProduct,
-          seller_product_id: sellerProduct?.seller_product_id,
-          current_price: sellerProduct?.price ?? template.suggested_price,
-          is_available: sellerProduct?.is_available ?? true
-        }
-      }))
-
-    } catch (error) {
-      console.error('Error updating product catalog:', error)
-      Alert.alert('Error', 'Failed to update product catalog. Please try again.')
-    }
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProducts(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    )
+    
+    setProducts(prev => prev.map(product => 
+      product.product_id === productId 
+        ? { ...product, isSelected: !product.isSelected }
+        : product
+    ))
   }
 
   const toggleViewMode = () => {
     setViewMode(viewMode === "grid" ? "list" : "grid")
   }
 
-  const toggleStockStatus = (id: string) => {
-    const updatedProducts = products.map((product) =>
-      product.template_id === id ? { ...product, is_available: !product.is_available } : product,
-    )
+  const toggleStockStatus = async (productId: string) => {
+    try {
+      const product = products.find(p => p.product_id === productId)
+      if (!product) return
 
-    setProducts(updatedProducts)
+      const newAvailability = !product.is_available
+
+      const { error } = await supabase
+        .from('products')
+        .update({ is_available: newAvailability })
+        .eq('product_id', productId)
+
+      if (error) throw error
+
+      setProducts(prev => prev.map(p => 
+        p.product_id === productId 
+          ? { ...p, is_available: newAvailability }
+          : p
+      ))
+
+    } catch (error) {
+      console.error('Error updating stock status:', error)
+      Alert.alert('Error', 'Failed to update stock status. Please try again.')
+    }
   }
 
   const handleAddProduct = () => {
@@ -310,10 +173,10 @@ const ProductsScreen = () => {
   }
 
   const handleEditProduct = (product: DisplayProduct) => {
-    navigation.navigate('ProductForm', { product })
+    navigation.navigate('ProductForm', { product, isEdit: true })
   }
 
-  const handleBatchAction = () => {
+  const handleBatchAction = async () => {
     if (selectedProducts.length === 0) {
       Alert.alert("No Products Selected", "Please select at least one product.")
       return
@@ -326,20 +189,29 @@ const ProductsScreen = () => {
       },
       {
         text: "Confirm",
-        onPress: () => {
-          const updatedProducts = products.map((product) =>
-            selectedProducts.includes(product.template_id) ? { ...product, is_available: false } : product,
-          )
+        onPress: async () => {
+          try {
+            const { error } = await supabase
+              .from('products')
+              .update({ is_available: false })
+              .in('product_id', selectedProducts)
 
-          setProducts(updatedProducts)
-          setSelectedProducts([])
+            if (error) throw error
+
+            setProducts(prev => prev.map(product =>
+              selectedProducts.includes(product.product_id) 
+                ? { ...product, is_available: false, isSelected: false }
+                : product
+            ))
+            setSelectedProducts([])
+            Alert.alert('Success', 'Products marked as out of stock.')
+          } catch (error) {
+            console.error('Error updating products:', error)
+            Alert.alert('Error', 'Failed to update products. Please try again.')
+          }
         },
       },
     ])
-  }
-
-  const handleAddToTemplates = () => {
-    navigation.navigate('ProductForm', { isTemplate: true })
   }
 
   const handleDeleteProduct = async (product: DisplayProduct) => {
@@ -358,9 +230,9 @@ const ProductsScreen = () => {
             try {
               setIsLoading(true)
               const { error } = await supabase
-                .from('seller_products')
+                .from('products')
                 .delete()
-                .eq('seller_product_id', product.seller_product_id)
+                .eq('product_id', product.product_id)
 
               if (error) throw error
 
@@ -382,12 +254,16 @@ const ProductsScreen = () => {
   const renderGridItem = ({ item }: { item: DisplayProduct }) => (
     <View style={styles.gridItem}>
       <TouchableOpacity
-        style={[styles.productCard, selectedProducts.includes(item.template_id) && styles.productCardSelected]}
-        onPress={() => toggleProductSelection(item.template_id)}
+        style={[styles.productCard, item.isSelected && styles.productCardSelected]}
+        onPress={() => toggleProductSelection(item.product_id)}
         accessibilityLabel={`${item.name} card`}
       >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: item.image_url as string }} style={styles.productImage} accessibilityLabel={`${item.name} image`} />
+          <Image 
+            source={{ uri: item.image_url || `https://via.placeholder.com/200?text=${item.name.charAt(0)}` }} 
+            style={styles.productImage} 
+            accessibilityLabel={`${item.name} image`} 
+          />
 
           {!item.is_available && (
             <View style={styles.outOfStockOverlay}>
@@ -397,7 +273,7 @@ const ProductsScreen = () => {
 
           <TouchableOpacity
             style={[styles.stockToggle, item.is_available ? styles.inStockToggle : styles.outOfStockToggle]}
-            onPress={() => toggleStockStatus(item.template_id)}
+            onPress={() => toggleStockStatus(item.product_id)}
             accessibilityLabel={`Toggle ${item.name} stock status`}
           >
             <Ionicons name={item.is_available ? "checkmark" : "close"} size={16} color="#FFFFFF" />
@@ -406,7 +282,7 @@ const ProductsScreen = () => {
 
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.productPrice}>${item.current_price}/{item.price_unit}</Text>
+          <Text style={styles.productPrice}>${item.price}/{item.price_unit}</Text>
 
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{item.product_type}</Text>
@@ -438,12 +314,16 @@ const ProductsScreen = () => {
 
   const renderListItem = ({ item }: { item: DisplayProduct }) => (
     <TouchableOpacity
-      style={[styles.listItem, selectedProducts.includes(item.template_id) && styles.listItemSelected]}
-      onPress={() => toggleProductSelection(item.template_id)}
+      style={[styles.listItem, item.isSelected && styles.listItemSelected]}
+      onPress={() => toggleProductSelection(item.product_id)}
       accessibilityLabel={`${item.name} list item`}
     >
       <View style={styles.listImageContainer}>
-        <Image source={{ uri: item.image_url as string }} style={styles.listItemImage} accessibilityLabel={`${item.name} image`} />
+        <Image 
+          source={{ uri: item.image_url || `https://via.placeholder.com/200?text=${item.name.charAt(0)}` }} 
+          style={styles.listItemImage} 
+          accessibilityLabel={`${item.name} image`} 
+        />
 
         {!item.is_available && (
           <View style={styles.outOfStockOverlayList}>
@@ -454,7 +334,7 @@ const ProductsScreen = () => {
 
       <View style={styles.listItemInfo}>
         <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>${item.current_price}/{item.price_unit}</Text>
+        <Text style={styles.productPrice}>${item.price}/{item.price_unit}</Text>
 
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryText}>{item.product_type}</Text>
@@ -483,7 +363,7 @@ const ProductsScreen = () => {
 
       <TouchableOpacity
         style={[styles.stockToggleList, item.is_available ? styles.inStockToggle : styles.outOfStockToggle]}
-        onPress={() => toggleStockStatus(item.template_id)}
+        onPress={() => toggleStockStatus(item.product_id)}
         accessibilityLabel={`Toggle ${item.name} stock status`}
       >
         <Ionicons name={item.is_available ? "checkmark" : "close"} size={16} color="#FFFFFF" />
@@ -537,32 +417,44 @@ const ProductsScreen = () => {
             </View>
           )}
 
-          {viewMode === "grid" ? (
-            <FlatList
-              key="grid"
-              data={products}
-              renderItem={renderGridItem}
-              keyExtractor={(item) => item.template_id}
-              numColumns={2}
-              contentContainerStyle={styles.productsGrid}
-              removeClippedSubviews={true}
-              initialNumToRender={6}
-              maxToRenderPerBatch={10}
-              windowSize={5}
-            />
+          {products.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="basket-outline" size={64} color={theme.colors.placeholder} />
+              <Text style={styles.emptyTitle}>No Products Yet</Text>
+              <Text style={styles.emptyDescription}>
+                Add your first product to start selling to customers
+              </Text>
+            </View>
           ) : (
-            <FlatList
-              key="list"
-              data={products}
-              renderItem={renderListItem}
-              keyExtractor={(item) => item.template_id}
-              numColumns={1}
-              contentContainerStyle={styles.productsList}
-              removeClippedSubviews={true}
-              initialNumToRender={8}
-              maxToRenderPerBatch={10}
-              windowSize={5}
-            />
+            <>
+              {viewMode === "grid" ? (
+                <FlatList
+                  key="grid"
+                  data={products}
+                  renderItem={renderGridItem}
+                  keyExtractor={(item) => item.product_id}
+                  numColumns={2}
+                  contentContainerStyle={styles.productsGrid}
+                  removeClippedSubviews={true}
+                  initialNumToRender={6}
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                />
+              ) : (
+                <FlatList
+                  key="list"
+                  data={products}
+                  renderItem={renderListItem}
+                  keyExtractor={(item) => item.product_id}
+                  numColumns={1}
+                  contentContainerStyle={styles.productsList}
+                  removeClippedSubviews={true}
+                  initialNumToRender={8}
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                />
+              )}
+            </>
           )}
 
           {/* Floating Action Button */}
@@ -647,6 +539,25 @@ const styles = StyleSheet.create({
   batchActionText: {
     color: "#FFFFFF",
     fontWeight: "bold",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  emptyDescription: {
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   productsGrid: {
     padding: spacing.md,

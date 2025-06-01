@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView, Platform, Alert } from "react-native"
+import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView, Platform, Alert, AlertButton } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
@@ -9,6 +9,8 @@ import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
 import { useLocation } from "../../hooks/useLocation"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
+import LocationPicker from "../../components/LocationPicker"
+import { LocationCoords } from "../../lib/locationService"
 
 interface Buyer {
   id: string;
@@ -67,14 +69,20 @@ const DashboardScreen = () => {
     currentLocation, 
     isLoading: locationLoading, 
     error: locationError, 
+    hasPermission,
+    isManualLocation,
     startTracking, 
     stopTracking, 
-    updateLocation 
+    updateLocation,
+    setManualLocation,
+    refreshLocation,
+    checkPermissions
   } = useLocation()
   
   const [isOpen, setIsOpen] = useState(false)
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
 
   // Update seller's business status in database
   const updateBusinessStatus = async (newStatus: boolean) => {
@@ -112,14 +120,56 @@ const DashboardScreen = () => {
 
     try {
       if (newStatus) {
-        // Opening business - start location tracking
-        if (!currentLocation) {
+        // Opening business - check location permissions first
+        if (!hasPermission) {
           Alert.alert(
-            "Location Required", 
-            "Please enable location services to start sharing your location with customers."
+            "Location Permission Required", 
+            "Please enable location access to share your location with customers. This helps customers find you on the map.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { 
+                text: "Enable Location", 
+                onPress: async () => {
+                  await checkPermissions()
+                  if (!hasPermission) {
+                    Alert.alert(
+                      "Location Access Denied",
+                      "To share your location with customers, please enable location access in your device settings.",
+                      [
+                        { text: "OK" }
+                      ]
+                    )
+                  }
+                }
+              }
+            ]
           )
           setIsUpdatingStatus(false)
           return
+        }
+
+        if (!currentLocation) {
+          // Try to get location quickly (5 second timeout)
+          console.log('Attempting quick location fetch...')
+          const quickLocation = await refreshLocation()
+          
+          // If still no location after quick attempt, immediately offer manual selection
+          if (!currentLocation) {
+            Alert.alert(
+              "Set Your Location", 
+              "We couldn't detect your location automatically. Please set your business location manually on the map.",
+              [
+                { text: "Cancel", style: "cancel", onPress: () => setIsUpdatingStatus(false) },
+                { 
+                  text: "Set Location", 
+                  onPress: () => {
+                    setShowLocationPicker(true)
+                  }
+                }
+              ]
+            )
+            return
+          }
         }
 
         // Update business status first
@@ -129,7 +179,7 @@ const DashboardScreen = () => {
           return
         }
 
-        // Start location tracking
+        // Start location tracking (will skip if manual location is set)
         await startTracking()
         
         // Update initial location
@@ -159,6 +209,32 @@ const DashboardScreen = () => {
     }
   }
 
+  const handleLocationSelected = async (location: LocationCoords) => {
+    setManualLocation(location)
+    setShowLocationPicker(false)
+    
+    // Now try to open business again
+    setIsUpdatingStatus(true)
+    try {
+      const statusUpdated = await updateBusinessStatus(true)
+      if (statusUpdated && userInfo?.profileData?.seller_id) {
+        await updateLocation(userInfo.profileData.seller_id)
+        setIsOpen(true)
+        Alert.alert("Business Opened", "You are now visible to nearby customers with your selected location!")
+      }
+    } catch (error) {
+      console.error('Error opening business with manual location:', error)
+      Alert.alert("Error", "Failed to open business")
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleLocationPickerCancel = () => {
+    setShowLocationPicker(false)
+    setIsUpdatingStatus(false)
+  }
+
   // Update location in database when location changes and business is open
   useEffect(() => {
     if (isOpen && currentLocation && userInfo?.profileData?.seller_id) {
@@ -169,7 +245,26 @@ const DashboardScreen = () => {
   // Show location error if any
   useEffect(() => {
     if (locationError) {
-      Alert.alert("Location Error", locationError.message)
+      let title = "Location Error"
+      let message = locationError.message
+      let buttons: AlertButton[] = [{ text: "OK" }]
+
+      if (locationError.code === 'PERMISSION_DENIED' || locationError.code === 'SERVICES_DISABLED') {
+        title = "Location Access Required"
+        buttons = [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Settings", 
+            onPress: () => {
+              // In a real app, you might want to open device settings
+              Alert.alert("Settings", "Please enable location services in your device settings.")
+            }
+          }
+        ]
+        Alert.alert(title, message, buttons)
+      }
+      // Don't show automatic alerts for LOCATION_UNAVAILABLE or LOCATION_ERROR
+      // These are handled in the business toggle flow
     }
   }, [locationError])
 
@@ -266,7 +361,8 @@ const DashboardScreen = () => {
               </Text>
               {currentLocation && (
                 <Text style={styles.locationInfo}>
-                  Location: {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                  {isManualLocation ? "Manual location: " : "GPS location: "}
+                  {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
                 </Text>
               )}
             </View>
@@ -286,13 +382,22 @@ const DashboardScreen = () => {
           {isOpen && (
             <View style={styles.locationSharingContainer}>
               <View style={styles.locationIconContainer}>
-                <Ionicons name="globe" size={24} color={theme.colors.primary} />
+                <Ionicons 
+                  name={isManualLocation ? "location" : "globe"} 
+                  size={24} 
+                  color={theme.colors.primary} 
+                />
               </View>
 
               <View style={styles.locationTextContainer}>
-                <Text style={styles.locationSharingText}>Location sharing is active</Text>
+                <Text style={styles.locationSharingText}>
+                  {isManualLocation ? "Manual location set" : "Location sharing is active"}
+                </Text>
                 <Text style={styles.locationSharingDescription}>
-                  Your real-time location is being shared with nearby customers
+                  {isManualLocation 
+                    ? "Your selected location is being shared with nearby customers"
+                    : "Your real-time location is being shared with nearby customers"
+                  }
                 </Text>
               </View>
             </View>
@@ -325,6 +430,13 @@ const DashboardScreen = () => {
           </View>
         )}
       </View>
+
+      <LocationPicker
+        visible={showLocationPicker}
+        onLocationSelected={handleLocationSelected}
+        onCancel={handleLocationPickerCancel}
+        initialLocation={currentLocation || undefined}
+      />
     </SafeAreaView>
   )
 }

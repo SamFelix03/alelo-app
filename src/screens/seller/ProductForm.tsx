@@ -24,30 +24,39 @@ import { useAuth } from "../../context/AuthContext"
 
 interface RouteParams {
   product?: {
-    seller_product_id?: string;
+    product_id?: string;
     name: string;
-    price: string;
+    price: number;
     price_unit: string;
     product_type: string;
     image_url: string | null;
     description?: string;
   };
+  isEdit?: boolean;
 }
 
-const CATEGORIES = ["Vegetables", "Fruits", "Bakery", "Dairy", "Meat", "Seafood", "Spices", "Other"]
+const CATEGORIES = [
+  { label: "Fruits", value: "fruits" },
+  { label: "Vegetables", value: "vegetables" },
+  { label: "Prepared Food", value: "prepared_food" },
+  { label: "Beverages", value: "beverages" },
+  { label: "Crafts", value: "crafts" },
+  { label: "Other", value: "other" }
+]
 
 const UNITS = ["kg", "g", "lb", "oz", "dozen", "piece", "bunch", "liter", "ml"]
 
 const ProductForm = () => {
   const navigation = useNavigation()
   const route = useRoute()
-  const { product } = (route.params as RouteParams) || {}
+  const { product, isEdit } = (route.params as RouteParams) || {}
   const { userInfo } = useAuth()
 
   const [name, setName] = useState(product?.name || "")
-  const [price, setPrice] = useState(product?.price || "")
+  const [price, setPrice] = useState(product?.price?.toString() || "")
   const [unit, setUnit] = useState(product?.price_unit || "kg")
-  const [category, setCategory] = useState(product?.product_type || "Vegetables")
+  const [category, setCategory] = useState(product?.product_type || "fruits")
+  const [description, setDescription] = useState(product?.description || "")
   const [image, setImage] = useState(product?.image_url || null)
   const [showCategoryPicker, setShowCategoryPicker] = useState(false)
   const [showUnitPicker, setShowUnitPicker] = useState(false)
@@ -175,11 +184,6 @@ const ProductForm = () => {
       return
     }
 
-    if (!image) {
-      Alert.alert("Error", "Please add a product image.")
-      return
-    }
-
     setIsSaving(true)
     try {
       const productData = {
@@ -187,38 +191,39 @@ const ProductForm = () => {
         name: name.trim(),
         price: Number(price),
         price_unit: unit,
-        product_type: category.toLowerCase(),
+        product_type: category,
         image_url: image,
-        is_available: true,
-        is_active: true,
-        description: null, // Optional field
-        template_id: null // Since this is a custom product
+        description: description.trim() || null,
+        is_available: true
       }
 
       let result;
-      if (product?.seller_product_id) {
+      if (isEdit && product?.product_id) {
         // Update existing product
         result = await supabase
-          .from('seller_products')
+          .from('products')
           .update(productData)
-          .eq('seller_product_id', product.seller_product_id)
-          .select()
-          .single()
+          .eq('product_id', product.product_id)
       } else {
-        // Add new product
+        // Create new product
         result = await supabase
-          .from('seller_products')
-          .insert(productData)
-          .select()
-          .single()
+          .from('products')
+          .insert([productData])
       }
 
-      if (result.error) throw result.error
+      if (result.error) {
+        throw result.error
+      }
 
       Alert.alert(
         "Success", 
-        `Product ${product ? "updated" : "added"} successfully!`,
-        [{ text: "OK", onPress: () => navigation.goBack() }]
+        isEdit ? "Product updated successfully!" : "Product added successfully!",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.goBack()
+          }
+        ]
       )
     } catch (error) {
       console.error('Error saving product:', error)
@@ -228,106 +233,127 @@ const ProductForm = () => {
     }
   }
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
-          accessibilityLabel="Back button"
+          accessibilityLabel="Go back"
         >
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
         </TouchableOpacity>
-
-        <Text style={styles.title}>{product ? "Edit Product" : "Add Product"}</Text>
-
-        <View style={styles.headerRight} />
+        <Text style={styles.title}>
+          {isEdit ? "Edit Product" : "Add Product"}
+        </Text>
+        <View style={styles.placeholder} />
       </View>
 
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Loading seller information...</Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.form}>
+          {/* Image Upload Section */}
           <TouchableOpacity
-            style={styles.imagePickerContainer}
+            style={styles.imageContainer}
             onPress={handleImagePicker}
-            disabled={isUploading || !sellerId}
+            disabled={isUploading}
             accessibilityLabel="Upload product image"
           >
             {image ? (
-              <>
-                <Image source={{ uri: image }} style={styles.productImage} accessibilityLabel="Selected product image" />
-                {isUploading && (
-                  <View style={styles.uploadingOverlay}>
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                  </View>
-                )}
-              </>
+              <Image source={{ uri: image }} style={styles.productImage} />
             ) : (
               <View style={styles.imagePlaceholder}>
                 <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
-                <Text style={styles.imagePlaceholderText}>
-                  {isUploading ? "Uploading..." : "Tap to upload"}
-                </Text>
+                <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+              </View>
+            )}
+            {isUploading && (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
               </View>
             )}
           </TouchableOpacity>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Product Name</Text>
+          {/* Product Name */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Product Name *</Text>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
               placeholder="Enter product name"
+              placeholderTextColor={theme.colors.placeholder}
               accessibilityLabel="Product name input"
-              editable={!isLoading}
             />
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Price</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
+          {/* Description */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Description</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Enter product description (optional)"
+              placeholderTextColor={theme.colors.placeholder}
+              multiline
+              numberOfLines={3}
+              accessibilityLabel="Product description input"
+            />
+          </View>
+
+          {/* Price and Unit Row */}
+          <View style={styles.row}>
+            <View style={[styles.inputGroup, { flex: 2, marginRight: spacing.sm }]}>
+              <Text style={styles.label}>Price *</Text>
               <TextInput
-                style={styles.priceInput}
+                style={styles.input}
                 value={price}
                 onChangeText={setPrice}
                 placeholder="0.00"
+                placeholderTextColor={theme.colors.placeholder}
                 keyboardType="decimal-pad"
-                accessibilityLabel="Price input"
-                editable={!isLoading}
+                accessibilityLabel="Product price input"
               />
-              <Text style={styles.pricePerText}>per</Text>
+            </View>
+
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={styles.label}>Unit</Text>
               <TouchableOpacity
-                style={styles.unitSelector}
+                style={styles.picker}
                 onPress={() => setShowUnitPicker(!showUnitPicker)}
-                disabled={isLoading}
-                accessibilityLabel="Unit selector"
+                accessibilityLabel="Select price unit"
               >
-                <Text style={styles.unitText}>{unit}</Text>
-                <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
+                <Text style={styles.pickerText}>{unit}</Text>
+                <Ionicons name="chevron-down" size={20} color={theme.colors.placeholder} />
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Unit Picker */}
           {showUnitPicker && (
             <View style={styles.pickerContainer}>
               {UNITS.map((unitOption) => (
                 <TouchableOpacity
                   key={unitOption}
-                  style={[styles.pickerItem, unit === unitOption && styles.pickerItemSelected]}
+                  style={[styles.pickerOption, unit === unitOption && styles.pickerOptionSelected]}
                   onPress={() => {
                     setUnit(unitOption)
                     setShowUnitPicker(false)
                   }}
-                  disabled={isLoading}
-                  accessibilityLabel={`${unitOption} option`}
+                  accessibilityLabel={`Select ${unitOption} unit`}
                 >
-                  <Text style={[styles.pickerItemText, unit === unitOption && styles.pickerItemTextSelected]}>
+                  <Text style={[styles.pickerOptionText, unit === unitOption && styles.pickerOptionTextSelected]}>
                     {unitOption}
                   </Text>
                 </TouchableOpacity>
@@ -335,57 +361,61 @@ const ProductForm = () => {
             </View>
           )}
 
-          <View style={styles.formGroup}>
+          {/* Category */}
+          <View style={styles.inputGroup}>
             <Text style={styles.label}>Category</Text>
             <TouchableOpacity
-              style={styles.categorySelector}
+              style={styles.picker}
               onPress={() => setShowCategoryPicker(!showCategoryPicker)}
-              disabled={isLoading}
-              accessibilityLabel="Category selector"
+              accessibilityLabel="Select product category"
             >
-              <Text style={styles.categoryText}>{category}</Text>
-              <Ionicons name="chevron-down" size={16} color={theme.colors.text} />
+              <Text style={styles.pickerText}>
+                {CATEGORIES.find(cat => cat.value === category)?.label || category}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.colors.placeholder} />
             </TouchableOpacity>
           </View>
 
+          {/* Category Picker */}
           {showCategoryPicker && (
             <View style={styles.pickerContainer}>
               {CATEGORIES.map((categoryOption) => (
                 <TouchableOpacity
-                  key={categoryOption}
-                  style={[styles.pickerItem, category === categoryOption && styles.pickerItemSelected]}
+                  key={categoryOption.value}
+                  style={[styles.pickerOption, category === categoryOption.value && styles.pickerOptionSelected]}
                   onPress={() => {
-                    setCategory(categoryOption)
+                    setCategory(categoryOption.value)
                     setShowCategoryPicker(false)
                   }}
-                  disabled={isLoading}
-                  accessibilityLabel={`${categoryOption} option`}
+                  accessibilityLabel={`Select ${categoryOption.label} category`}
                 >
-                  <Text style={[styles.pickerItemText, category === categoryOption && styles.pickerItemTextSelected]}>
-                    {categoryOption}
+                  <Text style={[styles.pickerOptionText, category === categoryOption.value && styles.pickerOptionTextSelected]}>
+                    {categoryOption.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           )}
+        </View>
+      </ScrollView>
 
-          <TouchableOpacity 
-            style={[
-              styles.saveButton, 
-              (isSaving || isUploading || isLoading) && styles.disabledButton
-            ]} 
-            onPress={handleSave}
-            disabled={isSaving || isUploading || isLoading}
-            accessibilityLabel="Save button"
-          >
-            {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.saveButtonText}>Save Product</Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      )}
+      {/* Save Button */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={isSaving}
+          accessibilityLabel="Save product"
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={styles.saveButtonText}>
+              {isEdit ? "Update Product" : "Add Product"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   )
 }
@@ -395,173 +425,165 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
-    paddingBottom: spacing.lg,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  backButton: {
-    padding: spacing.xs,
-  },
-  headerRight: {
-    width: 40, // Same width as backButton for balance
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: theme.colors.text,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl, // Extra padding at bottom for save button
-  },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: spacing.xl,
-  },
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-  },
-  imagePickerContainer: {
-    alignSelf: "center",
-    marginBottom: spacing.xl,
-  },
-  productImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 12,
-  },
-  imagePlaceholder: {
-    width: 200,
-    height: 200,
-    borderRadius: 12,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.disabled,
-    borderStyle: "dashed",
-  },
-  imagePlaceholderText: {
-    marginTop: spacing.xs,
-    color: theme.colors.placeholder,
-  },
-  formGroup: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-    marginBottom: spacing.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.placeholder,
-    borderRadius: 8,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-  },
-  priceContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.placeholder,
-    borderRadius: 8,
-    padding: spacing.md,
-  },
-  currencySymbol: {
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-    marginRight: spacing.xs,
-  },
-  priceInput: {
-    flex: 1,
-    fontSize: fontSize.md,
-  },
-  pricePerText: {
-    fontSize: fontSize.md,
-    color: theme.colors.placeholder,
-    marginHorizontal: spacing.sm,
-  },
-  unitSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 4,
-  },
-  unitText: {
-    fontSize: fontSize.md,
-    marginRight: spacing.xs,
-  },
-  categorySelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.placeholder,
-    borderRadius: 8,
-    padding: spacing.md,
-  },
-  categoryText: {
-    fontSize: fontSize.md,
-  },
-  pickerContainer: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
-    marginBottom: spacing.lg,
-    padding: spacing.sm,
-  },
-  pickerItem: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 4,
-    marginBottom: spacing.xs,
-  },
-  pickerItemSelected: {
-    backgroundColor: theme.colors.primary,
-  },
-  pickerItemText: {
-    fontSize: fontSize.md,
-  },
-  pickerItemTextSelected: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-  },
-  uploadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.7,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  backButton: {
+    padding: spacing.sm,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: theme.colors.text,
+  },
+  placeholder: {
+    width: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  form: {
+    padding: spacing.lg,
+  },
+  imageContainer: {
+    alignSelf: "center",
+    marginBottom: spacing.xl,
+    position: "relative",
+  },
+  productImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 12,
+    resizeMode: "cover",
+  },
+  imagePlaceholder: {
+    width: 150,
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#E0E0E0",
+    borderStyle: "dashed",
+  },
+  imagePlaceholderText: {
+    marginTop: spacing.sm,
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+  },
+  uploadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inputGroup: {
+    marginBottom: spacing.lg,
+  },
+  label: {
+    fontSize: fontSize.md,
+    fontWeight: "600",
+    color: theme.colors.text,
+    marginBottom: spacing.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: spacing.md,
     fontSize: fontSize.md,
     color: theme.colors.text,
+    backgroundColor: "#FFFFFF",
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: "top",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  picker: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: spacing.md,
+    backgroundColor: "#FFFFFF",
+  },
+  pickerText: {
+    fontSize: fontSize.md,
+    color: theme.colors.text,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    marginTop: spacing.xs,
+    maxHeight: 200,
+  },
+  pickerOption: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  pickerOptionSelected: {
+    backgroundColor: theme.colors.primary + "20",
+  },
+  pickerOptionText: {
+    fontSize: fontSize.md,
+    color: theme.colors.text,
+  },
+  pickerOptionTextSelected: {
+    color: theme.colors.primary,
+    fontWeight: "600",
+  },
+  footer: {
+    padding: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+  },
+  saveButton: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 8,
+    padding: spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  saveButtonDisabled: {
+    backgroundColor: theme.colors.disabled,
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: fontSize.md,
+    fontWeight: "600",
   },
 })
 

@@ -240,7 +240,7 @@ BEGIN
   WHERE 
     s.current_location IS NOT NULL
     AND ST_DWithin(
-      s.current_location,
+      s.current_location, 
       ST_SetSRID(ST_MakePoint(buyer_lng, buyer_lat), 4326)::geography,
       radius_km * 1000
     )

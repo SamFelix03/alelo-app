@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { View, StyleSheet, Text, TouchableOpacity, Animated, Dimensions, Image, Platform, Alert } from "react-native"
+import { View, StyleSheet, Text, TouchableOpacity, Animated, Dimensions, Image, Platform, Alert, AlertButton } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
@@ -41,7 +41,13 @@ const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO
 const MapScreen = () => {
   const navigation = useNavigation<MapScreenNavigationProp>()
   const mapRef = useRef<MapView | null>(null)
-  const { currentLocation, refreshLocation } = useLocation()
+  const { 
+    currentLocation, 
+    refreshLocation, 
+    hasPermission, 
+    error: locationError,
+    checkPermissions 
+  } = useLocation()
   
   const [region, setRegion] = useState({
     latitude: 37.78825,
@@ -62,10 +68,52 @@ const MapScreen = () => {
   const bottomSheetHeight = useRef(new Animated.Value(0)).current
   const filtersHeight = useRef(new Animated.Value(0)).current
 
+  // Handle location errors
+  useEffect(() => {
+    if (locationError) {
+      let title = "Location Error"
+      let message = locationError.message
+      let buttons: AlertButton[] = [{ text: "OK" }]
+
+      if (locationError.code === 'PERMISSION_DENIED' || locationError.code === 'SERVICES_DISABLED') {
+        title = "Location Access Required"
+        message = "To find nearby vendors, please enable location access in your device settings."
+        buttons = [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Enable Location", 
+            onPress: async () => {
+              await checkPermissions()
+            }
+          }
+        ]
+      }
+
+      Alert.alert(title, message, buttons)
+    }
+  }, [locationError])
+
+  // Check permissions on mount
+  useEffect(() => {
+    if (!hasPermission) {
+      checkPermissions()
+    }
+  }, [])
+
   // Fetch nearby sellers from database
   const fetchNearbySellers = async () => {
     if (!currentLocation) {
       console.log('No current location available')
+      if (!hasPermission) {
+        Alert.alert(
+          "Location Required",
+          "Please enable location access to find nearby vendors.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Enable Location", onPress: checkPermissions }
+          ]
+        )
+      }
       return
     }
 

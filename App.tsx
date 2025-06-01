@@ -3,10 +3,9 @@ import { StatusBar } from "expo-status-bar"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { Provider as PaperProvider } from "react-native-paper"
 import { theme } from "./src/theme"
-import { registerRootComponent } from 'expo'
 import AppNavigator from "./src/navigation/AppNavigator"
 
-function App() {
+export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -18,5 +17,3 @@ function App() {
     </GestureHandlerRootView>
   )
 }
-
-export default registerRootComponent(App);

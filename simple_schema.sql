@@ -349,12 +349,56 @@ FROM sellers s WHERE s.name = 'Fresh Fruits & Veggies';
 INSERT INTO products (seller_id, name, description, price, price_unit, product_type, image_url) 
 SELECT 
   s.seller_id,
+  'Organic Bananas',
+  'Sweet organic bananas',
+  2.99,
+  'bunch',
+  'fruits',
+  'https://via.placeholder.com/200?text=Bananas'
+FROM sellers s WHERE s.name = 'Fresh Fruits & Veggies';
+
+INSERT INTO products (seller_id, name, description, price, price_unit, product_type, image_url) 
+SELECT 
+  s.seller_id,
+  'Fresh Carrots',
+  'Crunchy orange carrots',
+  1.99,
+  'lb',
+  'vegetables',
+  'https://via.placeholder.com/200?text=Carrots'
+FROM sellers s WHERE s.name = 'Fresh Fruits & Veggies';
+
+INSERT INTO products (seller_id, name, description, price, price_unit, product_type, image_url) 
+SELECT 
+  s.seller_id,
   'Sourdough Bread',
   'Freshly baked artisan sourdough',
   8.00,
   'loaf',
   'prepared_food',
   'https://via.placeholder.com/200?text=Bread'
+FROM sellers s WHERE s.name = 'Artisan Bakery Cart';
+
+INSERT INTO products (seller_id, name, description, price, price_unit, product_type, image_url) 
+SELECT 
+  s.seller_id,
+  'Chocolate Croissants',
+  'Buttery croissants with chocolate',
+  4.50,
+  'piece',
+  'prepared_food',
+  'https://via.placeholder.com/200?text=Croissant'
+FROM sellers s WHERE s.name = 'Artisan Bakery Cart';
+
+INSERT INTO products (seller_id, name, description, price, price_unit, product_type, image_url) 
+SELECT 
+  s.seller_id,
+  'Fresh Coffee',
+  'Locally roasted coffee beans',
+  12.99,
+  'lb',
+  'beverages',
+  'https://via.placeholder.com/200?text=Coffee'
 FROM sellers s WHERE s.name = 'Artisan Bakery Cart';
 
 -- =====================================================
