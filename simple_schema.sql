@@ -5,6 +5,9 @@
 -- Enable PostGIS extension for geospatial functionality
 CREATE EXTENSION IF NOT EXISTS postgis;
 
+-- Enable pg_trgm extension for similarity matching
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Drop existing tables if they exist (be careful with this in production)
 DROP TABLE IF EXISTS seller_location_history CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
@@ -313,6 +316,149 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Function to get seller's current location coordinates
+CREATE OR REPLACE FUNCTION get_seller_location(seller_uuid UUID)
+RETURNS TABLE (
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    ST_Y(s.current_location::geometry) as latitude,
+    ST_X(s.current_location::geometry) as longitude
+  FROM sellers s
+  WHERE s.seller_id = seller_uuid
+    AND s.current_location IS NOT NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to find nearby customers who have orders with items matching seller's product names (smart matching)
+CREATE OR REPLACE FUNCTION find_nearby_customers_with_needs(
+  seller_lat DOUBLE PRECISION,
+  seller_lng DOUBLE PRECISION,
+  radius_meters DOUBLE PRECISION DEFAULT 500.0,
+  seller_product_names TEXT[] DEFAULT ARRAY[]::TEXT[]
+)
+RETURNS TABLE (
+  buyer_id UUID,
+  buyer_name VARCHAR(100),
+  buyer_address TEXT,
+  distance_meters DOUBLE PRECISION,
+  needed_items JSONB,
+  latest_order_date TIMESTAMPTZ
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT DISTINCT
+    b.buyer_id,
+    b.name AS buyer_name,
+    b.address AS buyer_address,
+    ST_Distance(
+      b.current_location::geometry,
+      ST_SetSRID(ST_MakePoint(seller_lng, seller_lat), 4326)
+    ) AS distance_meters,
+    COALESCE(
+      (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'product_name', p.name,
+            'product_type', p.product_type,
+            'quantity', oi.quantity,
+            'unit_price', oi.unit_price
+          )
+        )
+        FROM orders o
+        JOIN order_items oi ON o.order_id = oi.order_id
+        JOIN products p ON oi.product_id = p.product_id
+        WHERE o.buyer_id = b.buyer_id
+          AND (
+            -- Smart matching: check if any seller product name is similar to ordered product name
+            EXISTS (
+              SELECT 1 FROM unnest(seller_product_names) AS seller_product
+              WHERE LOWER(p.name) LIKE '%' || LOWER(seller_product) || '%'
+                 OR LOWER(seller_product) LIKE '%' || LOWER(p.name) || '%'
+                 OR similarity(LOWER(p.name), LOWER(seller_product)) > 0.3
+            )
+          )
+          AND o.status IN ('pending', 'completed')
+        ORDER BY o.created_at DESC
+        LIMIT 10
+      ),
+      '[]'::jsonb
+    ) AS needed_items,
+    (
+      SELECT MAX(o.created_at)
+      FROM orders o
+      WHERE o.buyer_id = b.buyer_id
+    ) AS latest_order_date
+  FROM buyers b
+  WHERE b.current_location IS NOT NULL
+    AND ST_DWithin(
+      b.current_location::geometry,
+      ST_SetSRID(ST_MakePoint(seller_lng, seller_lat), 4326),
+      radius_meters
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      JOIN products p ON oi.product_id = p.product_id
+      WHERE o.buyer_id = b.buyer_id
+        AND (
+          -- Smart matching: check if any seller product name is similar to ordered product name
+          EXISTS (
+            SELECT 1 FROM unnest(seller_product_names) AS seller_product
+            WHERE LOWER(p.name) LIKE '%' || LOWER(seller_product) || '%'
+               OR LOWER(seller_product) LIKE '%' || LOWER(p.name) || '%'
+               OR similarity(LOWER(p.name), LOWER(seller_product)) > 0.3
+          )
+        )
+        AND o.status IN ('pending', 'completed')
+    )
+  ORDER BY distance_meters ASC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to find all nearby customers (regardless of needs)
+CREATE OR REPLACE FUNCTION find_nearby_customers(
+  seller_lat DOUBLE PRECISION,
+  seller_lng DOUBLE PRECISION,
+  radius_meters DOUBLE PRECISION DEFAULT 500.0
+)
+RETURNS TABLE (
+  buyer_id UUID,
+  buyer_name VARCHAR(100),
+  buyer_address TEXT,
+  distance_meters DOUBLE PRECISION,
+  latest_order_date TIMESTAMPTZ
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    b.buyer_id,
+    b.name AS buyer_name,
+    b.address AS buyer_address,
+    ST_Distance(
+      b.current_location::geometry,
+      ST_SetSRID(ST_MakePoint(seller_lng, seller_lat), 4326)
+    ) AS distance_meters,
+    (
+      SELECT MAX(o.created_at)
+      FROM orders o
+      WHERE o.buyer_id = b.buyer_id
+    ) AS latest_order_date
+  FROM buyers b
+  WHERE b.current_location IS NOT NULL
+    AND ST_DWithin(
+      b.current_location::geometry,
+      ST_SetSRID(ST_MakePoint(seller_lng, seller_lat), 4326),
+      radius_meters
+    )
+  ORDER BY distance_meters ASC;
+END;
+$$ LANGUAGE plpgsql;
+
 -- =====================================================
 -- SAMPLE DATA FOR TESTING
 -- =====================================================
@@ -401,6 +547,67 @@ SELECT
   'https://via.placeholder.com/200?text=Coffee'
 FROM sellers s WHERE s.name = 'Artisan Bakery Cart';
 
+-- Insert sample orders to test smart matching
+INSERT INTO orders (buyer_id, seller_id, status, total_amount, notes)
+SELECT 
+  b.buyer_id,
+  s.seller_id,
+  'completed',
+  15.50,
+  'Previous order for fresh produce'
+FROM buyers b, sellers s 
+WHERE b.name = 'John Doe' AND s.name = 'Fresh Fruits & Veggies';
+
+INSERT INTO orders (buyer_id, seller_id, status, total_amount, notes)
+SELECT 
+  b.buyer_id,
+  s.seller_id,
+  'completed',
+  8.00,
+  'Previous order for baked goods'
+FROM buyers b, sellers s 
+WHERE b.name = 'Jane Smith' AND s.name = 'Artisan Bakery Cart';
+
+-- Insert order items that will match with seller products
+INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal)
+SELECT 
+  o.order_id,
+  p.product_id,
+  2.0,
+  3.50,
+  7.00
+FROM orders o
+JOIN buyers b ON o.buyer_id = b.buyer_id
+JOIN products p ON p.name = 'Fresh Apples'
+WHERE b.name = 'John Doe'
+LIMIT 1;
+
+INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal)
+SELECT 
+  o.order_id,
+  p.product_id,
+  1.5,
+  1.99,
+  2.99
+FROM orders o
+JOIN buyers b ON o.buyer_id = b.buyer_id
+JOIN products p ON p.name = 'Fresh Carrots'
+WHERE b.name = 'John Doe'
+LIMIT 1;
+
+INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal)
+SELECT 
+  o.order_id,
+  p.product_id,
+  1.0,
+  8.00,
+  8.00
+FROM orders o
+JOIN buyers b ON o.buyer_id = b.buyer_id
+JOIN products p ON p.name = 'Sourdough Bread'
+WHERE b.name = 'Jane Smith'
+LIMIT 1;
+
 -- =====================================================
 -- COMPLETION MESSAGE
 -- =====================================================
@@ -423,12 +630,12 @@ BEGIN
   SELECT COUNT(*) INTO function_count
   FROM information_schema.routines 
   WHERE routine_schema = 'public' 
-  AND routine_name IN ('find_nearby_sellers', 'update_seller_location', 'get_seller_dashboard_stats');
+  AND routine_name IN ('find_nearby_sellers', 'update_seller_location', 'get_seller_dashboard_stats', 'get_seller_location', 'find_nearby_customers_with_needs', 'find_nearby_customers');
   
   -- Count sample sellers
   SELECT COUNT(*) INTO seller_count FROM sellers;
   
-  RETURN format('✅ Schema setup complete! Tables: %s/8, Functions: %s/3, Sample sellers: %s', 
+  RETURN format('✅ Schema setup complete! Tables: %s/8, Functions: %s/6, Sample sellers: %s', 
                 table_count, function_count, seller_count);
 END;
 $$ LANGUAGE plpgsql;

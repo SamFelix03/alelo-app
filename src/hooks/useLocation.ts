@@ -8,7 +8,9 @@ import {
   updateSellerLocation,
   getNearbySellersByLocation,
   isLocationServicesEnabled,
-  requestLocationPermission
+  requestLocationPermission,
+  getSellerLastLocation,
+  storeLocationPreference
 } from '../lib/locationService';
 
 interface UseLocationReturn {
@@ -21,6 +23,7 @@ interface UseLocationReturn {
   stopTracking: () => void;
   refreshLocation: () => Promise<void>;
   setManualLocation: (location: LocationCoords) => void;
+  loadSavedLocation: (sellerId: string) => Promise<void>;
   updateLocation: (sellerId: string) => Promise<boolean>;
   getNearbySellersByLocation: (radiusKm?: number) => Promise<any[]>;
   checkPermissions: () => Promise<void>;
@@ -70,6 +73,24 @@ export const useLocation = (): UseLocationReturn => {
     } catch (err) {
       setError({ code: 'PERMISSION_ERROR', message: 'Failed to check location permissions' });
       setHasPermission(false);
+    }
+  };
+
+  const loadSavedLocation = async (sellerId: string): Promise<void> => {
+    try {
+      console.log('Loading saved location for seller:', sellerId);
+      const savedLocation = await getSellerLastLocation(sellerId);
+      
+      if (savedLocation) {
+        setCurrentLocation(savedLocation);
+        setIsManualLocation(true); // Assume saved location is manual unless GPS updates it
+        setError(null);
+        console.log('Loaded saved location:', savedLocation);
+      } else {
+        console.log('No saved location found for seller');
+      }
+    } catch (error) {
+      console.error('Error loading saved location:', error);
     }
   };
 
@@ -170,6 +191,9 @@ export const useLocation = (): UseLocationReturn => {
     }
 
     try {
+      // Store location preference along with the location
+      await storeLocationPreference(sellerId, isManualLocation, currentLocation);
+      
       const success = await updateSellerLocation(sellerId, currentLocation);
       if (!success) {
         setError({ code: 'UPDATE_FAILED', message: 'Failed to update location in database' });
@@ -206,6 +230,7 @@ export const useLocation = (): UseLocationReturn => {
     stopTracking,
     refreshLocation,
     setManualLocation,
+    loadSavedLocation,
     updateLocation,
     getNearbySellersByLocation: getNearbySellersByLocationHook,
     checkPermissions,

@@ -76,6 +76,7 @@ const DashboardScreen = () => {
     updateLocation,
     setManualLocation,
     refreshLocation,
+    loadSavedLocation,
     checkPermissions
   } = useLocation()
   
@@ -83,6 +84,34 @@ const DashboardScreen = () => {
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [showLocationPicker, setShowLocationPicker] = useState(false)
+
+  // Load seller's saved location and business status when component mounts
+  useEffect(() => {
+    const loadSellerData = async () => {
+      if (userInfo?.profileData?.seller_id) {
+        // Load saved location from database
+        await loadSavedLocation(userInfo.profileData.seller_id);
+        
+        // Load business status from database
+        try {
+          const { data, error } = await supabase
+            .from('sellers')
+            .select('is_open')
+            .eq('seller_id', userInfo.profileData.seller_id)
+            .single();
+
+          if (!error && data) {
+            setIsOpen(data.is_open || false);
+            console.log('Loaded business status:', data.is_open);
+          }
+        } catch (error) {
+          console.error('Error loading business status:', error);
+        }
+      }
+    };
+
+    loadSellerData();
+  }, [userInfo?.profileData?.seller_id]);
 
   // Update seller's business status in database
   const updateBusinessStatus = async (newStatus: boolean) => {
@@ -212,6 +241,12 @@ const DashboardScreen = () => {
   const handleLocationSelected = async (location: LocationCoords) => {
     setManualLocation(location)
     setShowLocationPicker(false)
+    
+    // Immediately save the manual location to database
+    if (userInfo?.profileData?.seller_id) {
+      await updateLocation(userInfo.profileData.seller_id);
+      console.log('Manual location saved to database');
+    }
     
     // Now try to open business again
     setIsUpdatingStatus(true)
@@ -361,8 +396,13 @@ const DashboardScreen = () => {
               </Text>
               {currentLocation && (
                 <Text style={styles.locationInfo}>
-                  {isManualLocation ? "Manual location: " : "GPS location: "}
+                  {isManualLocation ? "Saved location: " : "GPS location: "}
                   {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                </Text>
+              )}
+              {!currentLocation && (
+                <Text style={styles.locationInfo}>
+                  No location set - will prompt to set location when opening business
                 </Text>
               )}
             </View>

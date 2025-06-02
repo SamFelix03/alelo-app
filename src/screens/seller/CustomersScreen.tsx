@@ -1,287 +1,327 @@
 "use client"
 
-import { useState } from "react"
-import { View, StyleSheet, Text, Image, TouchableOpacity, SafeAreaView, FlatList, Platform } from "react-native"
+import React, { useState, useEffect } from "react"
+import { View, StyleSheet, Text, Image, TouchableOpacity, SafeAreaView, FlatList, Platform, Alert, RefreshControl, Linking } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import { useLocation } from "../../hooks/useLocation"
+import { useAuth } from "../../context/AuthContext"
+import { getNearbyCustomersWithNeeds, getAllNearbyCustomers, getBuyerLastLocation } from "../../lib/locationService"
 
-// Mock data for customers
-const MOCK_CUSTOMERS = [
-  {
-    id: "1",
-    name: "John Doe",
-    avatar: "https://via.placeholder.com/50?text=JD",
-    lastOrder: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-    totalSpent: "$75.50",
-    orderCount: 8,
-    isLiked: true,
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    avatar: "https://via.placeholder.com/50?text=JS",
-    lastOrder: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-    totalSpent: "$120.75",
-    orderCount: 12,
-    isLiked: true,
-  },
-  {
-    id: "3",
-    name: "Bob Johnson",
-    avatar: "https://via.placeholder.com/50?text=BJ",
-    lastOrder: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
-    totalSpent: "$45.25",
-    orderCount: 4,
-    isLiked: false,
-  },
-  {
-    id: "4",
-    name: "Alice Williams",
-    avatar: "https://via.placeholder.com/50?text=AW",
-    lastOrder: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-    totalSpent: "$95.00",
-    orderCount: 10,
-    isLiked: false,
-  },
-  {
-    id: "5",
-    name: "Charlie Brown",
-    avatar: "https://via.placeholder.com/50?text=CB",
-    lastOrder: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-    totalSpent: "$35.50",
-    orderCount: 3,
-    isLiked: true,
-  },
-]
+interface Customer {
+  buyer_id: string;
+  buyer_name: string;
+  buyer_address: string;
+  distance_meters: number;
+  needed_items?: any[];
+  latest_order_date?: string;
+}
 
 const CustomersScreen = () => {
   const navigation = useNavigation()
-  const [sortBy, setSortBy] = useState("recent") // 'recent', 'spent', 'orders'
-  const [showLikedOnly, setShowLikedOnly] = useState(false)
-  const [minOrderCount, setMinOrderCount] = useState(0)
-  const [customers, setCustomers] = useState(MOCK_CUSTOMERS)
+  const { userInfo } = useAuth()
+  const { currentLocation, loadSavedLocation } = useLocation()
+  
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [showAllCustomers, setShowAllCustomers] = useState(true)
+  const [radiusMeters, setRadiusMeters] = useState(500)
 
-  const formatDate = (date) => {
+  // Load seller's saved location when component mounts
+  useEffect(() => {
+    const loadSellerLocation = async () => {
+      if (userInfo?.profileData?.seller_id) {
+        await loadSavedLocation(userInfo.profileData.seller_id);
+      }
+    };
+
+    loadSellerLocation();
+  }, [userInfo?.profileData?.seller_id]);
+
+  // Load customers when component mounts or when location/settings change
+  useEffect(() => {
+    loadCustomers()
+  }, [currentLocation, showAllCustomers, radiusMeters, userInfo?.profileData?.seller_id])
+
+  const loadCustomers = async () => {
+    if (!currentLocation || !userInfo?.profileData?.seller_id) {
+      console.log('Missing location or seller ID')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      let customerData: Customer[] = []
+      
+      if (showAllCustomers) {
+        // Show all nearby customers regardless of needs
+        customerData = await getAllNearbyCustomers(currentLocation, radiusMeters)
+      } else {
+        // Show only customers who need items that overlap with seller's stock
+        customerData = await getNearbyCustomersWithNeeds(
+          currentLocation, 
+          userInfo.profileData.seller_id, 
+          radiusMeters
+        )
+      }
+
+      setCustomers(customerData)
+      console.log(`Loaded ${customerData.length} customers`)
+    } catch (error) {
+      console.error('Error loading customers:', error)
+      Alert.alert('Error', 'Failed to load nearby customers')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const formatDistance = (distanceMeters: number): string => {
+    if (distanceMeters < 1000) {
+      return `${Math.round(distanceMeters)}m`
+    }
+    return `${(distanceMeters / 1000).toFixed(1)}km`
+  }
+
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return 'No orders yet'
+    
+    const date = new Date(dateString)
     const now = new Date()
-    const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24))
+    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
 
     if (diffInDays === 0) {
       return "Today"
     } else if (diffInDays === 1) {
       return "Yesterday"
-    } else {
+    } else if (diffInDays < 7) {
       return `${diffInDays} days ago`
+    } else {
+      return date.toLocaleDateString()
     }
   }
 
-  const handleSort = (sortType) => {
-    setSortBy(sortType)
-
-    const sorted = [...MOCK_CUSTOMERS]
-
-    if (sortType === "recent") {
-      sorted.sort((a, b) => b.lastOrder - a.lastOrder)
-    } else if (sortType === "spent") {
-      sorted.sort((a, b) => Number.parseFloat(b.totalSpent.substring(1)) - Number.parseFloat(a.totalSpent.substring(1)))
-    } else if (sortType === "orders") {
-      sorted.sort((a, b) => b.orderCount - a.orderCount)
-    }
-
-    applyFilters(sorted)
-  }
-
-  const applyFilters = (customersToFilter = MOCK_CUSTOMERS) => {
-    let filtered = [...customersToFilter]
-
-    if (showLikedOnly) {
-      filtered = filtered.filter((customer) => customer.isLiked)
-    }
-
-    if (minOrderCount > 0) {
-      filtered = filtered.filter((customer) => customer.orderCount >= minOrderCount)
-    }
-
-    setCustomers(filtered)
-  }
-
-  const toggleLikedOnly = () => {
-    const newValue = !showLikedOnly
-    setShowLikedOnly(newValue)
-
-    let filtered = [...MOCK_CUSTOMERS]
-
-    if (newValue) {
-      filtered = filtered.filter((customer) => customer.isLiked)
-    }
-
-    if (minOrderCount > 0) {
-      filtered = filtered.filter((customer) => customer.orderCount >= minOrderCount)
-    }
-
-    if (sortBy === "recent") {
-      filtered.sort((a, b) => b.lastOrder - a.lastOrder)
-    } else if (sortBy === "spent") {
-      filtered.sort(
-        (a, b) => Number.parseFloat(b.totalSpent.substring(1)) - Number.parseFloat(a.totalSpent.substring(1)),
+  const renderNeededItems = (neededItems?: any[]) => {
+    if (!neededItems || neededItems.length === 0) {
+      return (
+        <Text style={styles.noItemsText}>No specific orders yet</Text>
       )
-    } else if (sortBy === "orders") {
-      filtered.sort((a, b) => b.orderCount - a.orderCount)
     }
 
-    setCustomers(filtered)
-  }
-
-  const setOrderCountFilter = (count) => {
-    setMinOrderCount(count)
-
-    let filtered = [...MOCK_CUSTOMERS]
-
-    if (showLikedOnly) {
-      filtered = filtered.filter((customer) => customer.isLiked)
-    }
-
-    filtered = filtered.filter((customer) => customer.orderCount >= count)
-
-    if (sortBy === "recent") {
-      filtered.sort((a, b) => b.lastOrder - a.lastOrder)
-    } else if (sortBy === "spent") {
-      filtered.sort(
-        (a, b) => Number.parseFloat(b.totalSpent.substring(1)) - Number.parseFloat(a.totalSpent.substring(1)),
-      )
-    } else if (sortBy === "orders") {
-      filtered.sort((a, b) => b.orderCount - a.orderCount)
-    }
-
-    setCustomers(filtered)
-  }
-
-  const renderCustomerItem = ({ item }) => (
-    <View style={styles.customerCard}>
-      <View style={styles.customerHeader}>
-        <View style={styles.customerInfo}>
-          <Image
-            source={{ uri: item.avatar }}
-            style={styles.customerAvatar}
-            accessibilityLabel={`${item.name} avatar`}
-          />
-
-          <View>
-            <Text style={styles.customerName}>{item.name}</Text>
-            <Text style={styles.lastOrderText}>Last order: {formatDate(item.lastOrder)}</Text>
+    return (
+      <View style={styles.neededItemsContainer}>
+        <Text style={styles.neededItemsTitle}>Items they need:</Text>
+        {neededItems.slice(0, 3).map((item, index) => (
+          <View key={index} style={styles.neededItem}>
+            <Text style={styles.itemName}>
+              • {item.product_name} ({item.quantity} units)
+            </Text>
+            <Text style={styles.itemType}>{item.product_type}</Text>
           </View>
-        </View>
-
-        {item.isLiked && (
-          <View style={styles.likedBadge}>
-            <Ionicons name="star" size={14} color="#FFFFFF" />
-            <Text style={styles.likedText}>Liked</Text>
-          </View>
+        ))}
+        {neededItems.length > 3 && (
+          <Text style={styles.moreItemsText}>
+            +{neededItems.length - 3} more items
+          </Text>
         )}
       </View>
+    )
+  }
 
-      <View style={styles.customerStats}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{item.totalSpent}</Text>
-          <Text style={styles.statLabel}>Total Spent</Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{item.orderCount}</Text>
-          <Text style={styles.statLabel}>Orders</Text>
+  const renderCustomerItem = ({ item }: { item: Customer }) => (
+    <TouchableOpacity 
+      style={styles.customerCard}
+      onPress={() => navigateToCustomer(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.customerHeader}>
+        <View style={styles.customerInfo}>
+          <View style={styles.customerIcon}>
+            <Ionicons name="person" size={24} color={theme.colors.primary} />
+          </View>
+          <View style={styles.customerDetails}>
+            <Text style={styles.customerName}>{item.buyer_name}</Text>
+            <View style={styles.metaInfo}>
+              <Text style={styles.distance}>{formatDistance(item.distance_meters)} away</Text>
+              <Text style={styles.lastOrder}>Last order: {formatDate(item.latest_order_date)}</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.navigationIcon}
+            onPress={(e) => {
+              e.stopPropagation() // Prevent card press
+              navigateToCustomer(item)
+            }}
+          >
+            <Ionicons name="navigate" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      <TouchableOpacity style={styles.messageButton} accessibilityLabel={`Message ${item.name} button`}>
-        <Ionicons name="chatbubble" size={16} color="#FFFFFF" />
-        <Text style={styles.messageButtonText}>Message</Text>
-      </TouchableOpacity>
-    </View>
+      {renderNeededItems(item.needed_items)}
+
+      <View style={styles.actionButtons}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.navigateButton]}
+          onPress={(e) => {
+            e.stopPropagation() // Prevent card press
+            navigateToCustomer(item)
+          }}
+        >
+          <Ionicons name="navigate" size={16} color="#FFFFFF" />
+          <Text style={styles.actionButtonText}>Navigate</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
   )
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="people" size={50} color={theme.colors.disabled} />
-      <Text style={styles.emptyText}>No customers found</Text>
-      <Text style={styles.emptySubtext}>Try adjusting your filters</Text>
+      <Text style={styles.emptyText}>
+        {showAllCustomers ? 'No customers nearby' : 'No customers need your items'}
+      </Text>
+      <Text style={styles.emptySubtext}>
+        {showAllCustomers 
+          ? 'Try increasing the search radius' 
+          : 'Try showing all customers or check your available products'
+        }
+      </Text>
+      {!showAllCustomers && (
+        <TouchableOpacity 
+          style={styles.showAllButton}
+          onPress={() => setShowAllCustomers(true)}
+        >
+          <Text style={styles.showAllButtonText}>Show All Nearby Customers</Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.title}>Nearby Customers</Text>
+      {currentLocation && (
+        <Text style={styles.locationText}>
+          Within {radiusMeters}m of your location
+        </Text>
+      )}
+    </View>
+  )
+
+  const renderFilters = () => (
+    <View style={styles.filtersContainer}>
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Show customers who:</Text>
+        <TouchableOpacity
+          style={[styles.toggleButton, !showAllCustomers && styles.toggleButtonActive]}
+          onPress={() => setShowAllCustomers(!showAllCustomers)}
+        >
+          <Text style={[styles.toggleButtonText, !showAllCustomers && styles.toggleButtonTextActive]}>
+            {showAllCustomers ? 'All nearby' : 'Need your items'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Search radius:</Text>
+        <View style={styles.radiusButtons}>
+          {[250, 500, 1000].map((radius) => (
+            <TouchableOpacity
+              key={radius}
+              style={[styles.radiusButton, radiusMeters === radius && styles.radiusButtonActive]}
+              onPress={() => setRadiusMeters(radius)}
+            >
+              <Text style={[styles.radiusButtonText, radiusMeters === radius && styles.radiusButtonTextActive]}>
+                {radius}m
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  )
+
+  // Get customer location and open navigation
+  const navigateToCustomer = async (customer: Customer) => {
+    try {
+      console.log('Getting location for customer:', customer.buyer_id)
+      
+      // Get the customer's location from database
+      const customerLocation = await getBuyerLastLocation(customer.buyer_id)
+      
+      if (!customerLocation) {
+        Alert.alert('Location Unavailable', 'Customer location is not available for navigation.')
+        return
+      }
+
+      console.log('Customer location retrieved:', customerLocation)
+
+      // Create the maps URL for navigation
+      const { latitude, longitude } = customerLocation
+      const destination = `${latitude},${longitude}`
+      const label = encodeURIComponent(customer.buyer_name)
+
+      let mapsUrl: string
+
+      if (Platform.OS === 'ios') {
+        // iOS: Use Apple Maps
+        mapsUrl = `http://maps.apple.com/?daddr=${destination}&dirflg=d&t=m`
+      } else {
+        // Android: Use Google Maps
+        mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`
+      }
+
+      console.log('Opening maps URL:', mapsUrl)
+
+      // Check if the URL can be opened
+      const canOpen = await Linking.canOpenURL(mapsUrl)
+      if (canOpen) {
+        await Linking.openURL(mapsUrl)
+      } else {
+        // Fallback: Open in browser with Google Maps
+        const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}`
+        await Linking.openURL(fallbackUrl)
+      }
+    } catch (error) {
+      console.error('Error navigating to customer:', error)
+      Alert.alert('Navigation Error', 'Unable to open navigation. Please try again.')
+    }
+  }
+
+  if (!currentLocation) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {renderHeader()}
+        <View style={styles.emptyContainer}>
+          <Ionicons name="location" size={50} color={theme.colors.disabled} />
+          <Text style={styles.emptyText}>Location Required</Text>
+          <Text style={styles.emptySubtext}>
+            Please enable location services to find nearby customers
+          </Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Customers</Text>
-      </View>
-
-      <View style={styles.filtersContainer}>
-        <View style={styles.sortContainer}>
-          <Text style={styles.sortLabel}>Sort by:</Text>
-
-          <View style={styles.sortButtons}>
-            <TouchableOpacity
-              style={[styles.sortButton, sortBy === "recent" && styles.sortButtonActive]}
-              onPress={() => handleSort("recent")}
-              accessibilityLabel="Sort by recent orders"
-            >
-              <Text style={[styles.sortButtonText, sortBy === "recent" && styles.sortButtonTextActive]}>Recent</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortButton, sortBy === "spent" && styles.sortButtonActive]}
-              onPress={() => handleSort("spent")}
-              accessibilityLabel="Sort by total spent"
-            >
-              <Text style={[styles.sortButtonText, sortBy === "spent" && styles.sortButtonTextActive]}>Spent</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortButton, sortBy === "orders" && styles.sortButtonActive]}
-              onPress={() => handleSort("orders")}
-              accessibilityLabel="Sort by order count"
-            >
-              <Text style={[styles.sortButtonText, sortBy === "orders" && styles.sortButtonTextActive]}>Orders</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>Liked Customers Only</Text>
-          <TouchableOpacity
-            style={[styles.toggleButton, showLikedOnly && styles.toggleButtonActive]}
-            onPress={toggleLikedOnly}
-            accessibilityLabel="Toggle liked customers only"
-          >
-            <View style={[styles.toggleCircle, showLikedOnly && styles.toggleCircleActive]} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>Minimum Orders</Text>
-          <View style={styles.orderCountButtons}>
-            {[0, 5, 10].map((count) => (
-              <TouchableOpacity
-                key={count}
-                style={[styles.orderCountButton, minOrderCount === count && styles.orderCountButtonActive]}
-                onPress={() => setOrderCountFilter(count)}
-                accessibilityLabel={`Set minimum ${count} orders`}
-              >
-                <Text
-                  style={[styles.orderCountButtonText, minOrderCount === count && styles.orderCountButtonTextActive]}
-                >
-                  {count === 0 ? "All" : count + "+"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-
+      {renderHeader()}
+      {renderFilters()}
+      
       <FlatList
         data={customers}
         renderItem={renderCustomerItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.buyer_id}
         contentContainerStyle={styles.customersList}
         ListEmptyComponent={renderEmptyState}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={loadCustomers}
+            colors={[theme.colors.primary]}
+          />
+        }
       />
     </SafeAreaView>
   )
@@ -305,39 +345,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: theme.colors.text,
   },
+  locationText: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+    marginTop: spacing.xs,
+  },
   filtersContainer: {
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
-  },
-  sortContainer: {
-    marginBottom: spacing.md,
-  },
-  sortLabel: {
-    fontSize: fontSize.sm,
-    color: theme.colors.placeholder,
-    marginBottom: spacing.xs,
-  },
-  sortButtons: {
-    flexDirection: "row",
-  },
-  sortButton: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: 20,
-    marginRight: spacing.sm,
-    backgroundColor: "#F5F5F5",
-  },
-  sortButtonActive: {
-    backgroundColor: theme.colors.primary,
-  },
-  sortButtonText: {
-    fontSize: fontSize.sm,
-    color: theme.colors.text,
-  },
-  sortButtonTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
+    backgroundColor: "#F8F9FA",
   },
   filterRow: {
     flexDirection: "row",
@@ -347,45 +364,43 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: fontSize.md,
+    color: theme.colors.text,
   },
   toggleButton: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: theme.colors.disabled,
-    padding: 2,
-    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: 20,
+    backgroundColor: "#E0E0E0",
   },
   toggleButtonActive: {
     backgroundColor: theme.colors.primary,
   },
-  toggleCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "#FFFFFF",
+  toggleButtonText: {
+    fontSize: fontSize.sm,
+    color: theme.colors.text,
   },
-  toggleCircleActive: {
-    alignSelf: "flex-end",
+  toggleButtonTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
-  orderCountButtons: {
+  radiusButtons: {
     flexDirection: "row",
   },
-  orderCountButton: {
+  radiusButton: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: 20,
     marginLeft: spacing.sm,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#E0E0E0",
   },
-  orderCountButtonActive: {
+  radiusButtonActive: {
     backgroundColor: theme.colors.primary,
   },
-  orderCountButtonText: {
+  radiusButtonText: {
     fontSize: fontSize.sm,
     color: theme.colors.text,
   },
-  orderCountButtonTextActive: {
+  radiusButtonTextActive: {
     color: "#FFFFFF",
     fontWeight: "bold",
   },
@@ -404,90 +419,143 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   customerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: spacing.md,
   },
   customerInfo: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  customerAvatar: {
+  customerIcon: {
     width: 50,
     height: 50,
     borderRadius: 25,
+    backgroundColor: "#F0F0F0",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: spacing.md,
   },
-  customerName: {
-    fontSize: fontSize.md,
-    fontWeight: "bold",
-    marginBottom: 2,
+  customerDetails: {
+    flex: 1,
   },
-  lastOrderText: {
+  customerName: {
+    fontSize: fontSize.lg,
+    fontWeight: "bold",
+    marginBottom: spacing.xs,
+  },
+  customerAddress: {
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
+    marginBottom: spacing.xs,
+  },
+  metaInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  distance: {
+    fontSize: fontSize.sm,
+    color: theme.colors.primary,
+    fontWeight: "bold",
+  },
+  lastOrder: {
     fontSize: fontSize.sm,
     color: theme.colors.placeholder,
   },
-  likedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFD700",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  likedText: {
-    fontSize: fontSize.xs,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginLeft: 2,
-  },
-  customerStats: {
-    flexDirection: "row",
+  neededItemsContainer: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 8,
+    padding: spacing.md,
     marginBottom: spacing.md,
   },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: fontSize.lg,
+  neededItemsTitle: {
+    fontSize: fontSize.md,
     fontWeight: "bold",
-    marginBottom: 2,
+    marginBottom: spacing.sm,
+    color: theme.colors.text,
   },
-  statLabel: {
+  neededItem: {
+    marginBottom: spacing.xs,
+  },
+  itemName: {
+    fontSize: fontSize.sm,
+    color: theme.colors.text,
+  },
+  itemType: {
     fontSize: fontSize.xs,
     color: theme.colors.placeholder,
+    marginLeft: spacing.md,
   },
-  messageButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.sm,
-    borderRadius: 8,
+  moreItemsText: {
+    fontSize: fontSize.sm,
+    color: theme.colors.primary,
+    fontStyle: "italic",
+    marginTop: spacing.xs,
   },
-  messageButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    marginLeft: spacing.xs,
+  noItemsText: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+    fontStyle: "italic",
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: spacing.xl,
-    marginTop: spacing.xxl,
   },
   emptyText: {
     fontSize: fontSize.lg,
     fontWeight: "bold",
     marginTop: spacing.md,
+    textAlign: "center",
   },
   emptySubtext: {
     fontSize: fontSize.md,
     color: theme.colors.placeholder,
     marginTop: spacing.xs,
+    textAlign: "center",
+  },
+  showAllButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 8,
+    marginTop: spacing.lg,
+  },
+  showAllButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: fontSize.md,
+  },
+  navigationIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: spacing.md,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.md,
+  },
+  actionButton: {
+    backgroundColor: theme.colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.sm,
+    borderRadius: 8,
+    paddingHorizontal: spacing.lg,
+  },
+  navigateButton: {
+    backgroundColor: "#2196F3", // Blue for navigation
+  },
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    marginLeft: spacing.xs,
+    fontSize: fontSize.sm,
   },
 })
 

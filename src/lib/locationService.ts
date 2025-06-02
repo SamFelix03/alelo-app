@@ -132,6 +132,58 @@ export const startLocationTracking = async (
   }
 };
 
+// Get seller's last known location from database
+export const getSellerLastLocation = async (sellerId: string): Promise<LocationCoords | null> => {
+  try {
+    // Use RPC function to properly extract coordinates from PostGIS geography
+    const { data, error } = await supabase
+      .rpc('get_seller_location', {
+        seller_uuid: sellerId
+      });
+
+    if (error) {
+      console.error('Error fetching seller location:', error);
+      return null;
+    }
+
+    if (data && data.length > 0) {
+      const location = {
+        latitude: data[0].latitude,
+        longitude: data[0].longitude
+      };
+      console.log('Successfully retrieved saved location:', location);
+      return location;
+    }
+
+    console.log('No location found in database for seller:', sellerId);
+    return null;
+  } catch (error) {
+    console.error('Error in getSellerLastLocation:', error);
+    return null;
+  }
+};
+
+// Store seller location preference (manual vs GPS) in local storage
+export const storeLocationPreference = async (sellerId: string, isManual: boolean, location: LocationCoords): Promise<void> => {
+  try {
+    // Store in database
+    await updateSellerLocation(sellerId, location);
+    
+    // Also store preference locally for faster access
+    const locationData = {
+      sellerId,
+      location,
+      isManual,
+      timestamp: new Date().toISOString()
+    };
+    
+    // In a real app, you might use AsyncStorage here
+    console.log('Stored location preference:', locationData);
+  } catch (error) {
+    console.error('Error storing location preference:', error);
+  }
+};
+
 // Update seller location in database
 export const updateSellerLocation = async (
   sellerId: string,
@@ -160,6 +212,7 @@ export const updateSellerLocation = async (
         timestamp: new Date().toISOString(),
       });
 
+    console.log('Successfully updated seller location in database:', location);
     return true;
   } catch (error) {
     console.error('Error updating seller location:', error);
@@ -216,4 +269,136 @@ export const formatDistance = (distanceKm: number): string => {
     return `${Math.round(distanceKm * 1000)}m`;
   }
   return `${distanceKm}km`;
+};
+
+// Get nearby customers who need items that overlap with seller's available stock
+export const getNearbyCustomersWithNeeds = async (
+  sellerLocation: LocationCoords,
+  sellerId: string,
+  radiusMeters: number = 500
+): Promise<any[]> => {
+  try {
+    // First, get the seller's available products
+    const { data: sellerProducts, error: productsError } = await supabase
+      .from('products')
+      .select('name')
+      .eq('seller_id', sellerId)
+      .eq('is_available', true);
+
+    if (productsError) {
+      console.error('Error fetching seller products:', productsError);
+      return [];
+    }
+
+    if (!sellerProducts || sellerProducts.length === 0) {
+      console.log('No available products for seller');
+      return [];
+    }
+
+    // Get product names that the seller has
+    const sellerProductNames = sellerProducts.map(p => p.name);
+    console.log('Seller has products:', sellerProductNames);
+
+    // Find nearby buyers who have orders with items matching seller's product names
+    const { data: nearbyCustomers, error: customersError } = await supabase
+      .rpc('find_nearby_customers_with_needs', {
+        seller_lat: sellerLocation.latitude,
+        seller_lng: sellerLocation.longitude,
+        radius_meters: radiusMeters,
+        seller_product_names: sellerProductNames
+      });
+
+    if (customersError) {
+      console.error('Error fetching nearby customers:', customersError);
+      return [];
+    }
+
+    return nearbyCustomers || [];
+  } catch (error) {
+    console.error('Error in getNearbyCustomersWithNeeds:', error);
+    return [];
+  }
+};
+
+// Get all nearby customers (within radius) regardless of needs
+export const getAllNearbyCustomers = async (
+  sellerLocation: LocationCoords,
+  radiusMeters: number = 500
+): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .rpc('find_nearby_customers', {
+        seller_lat: sellerLocation.latitude,
+        seller_lng: sellerLocation.longitude,
+        radius_meters: radiusMeters
+      });
+
+    if (error) {
+      console.error('Error fetching nearby customers:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getAllNearbyCustomers:', error);
+    return [];
+  }
+};
+
+// Update buyer location in database
+export const updateBuyerLocation = async (
+  buyerId: string,
+  location: LocationCoords
+): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('buyers')
+      .update({
+        current_location: `POINT(${location.longitude} ${location.latitude})`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('buyer_id', buyerId);
+
+    if (error) {
+      console.error('Error updating buyer location:', error);
+      return false;
+    }
+
+    console.log('Successfully updated buyer location in database:', location);
+    return true;
+  } catch (error) {
+    console.error('Error updating buyer location:', error);
+    return false;
+  }
+};
+
+// Get buyer's last known location from database
+export const getBuyerLastLocation = async (buyerId: string): Promise<LocationCoords | null> => {
+  try {
+    // Use RPC function to properly extract coordinates from PostGIS geography
+    const { data, error } = await supabase
+      .rpc('get_buyer_location', {
+        buyer_uuid: buyerId
+      });
+
+    if (error) {
+      console.error('Error fetching buyer location:', error);
+      return null;
+    }
+
+    if (data && data.length > 0) {
+      const location = {
+        latitude: data[0].latitude,
+        longitude: data[0].longitude
+      };
+      console.log('Successfully retrieved buyer saved location:', location);
+      return location;
+    }
+
+    console.log('No location found in database for buyer:', buyerId);
+    return null;
+  } catch (error) {
+    console.error('Error in getBuyerLastLocation:', error);
+    return null;
+  }
 }; 
