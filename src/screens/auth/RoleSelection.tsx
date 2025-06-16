@@ -72,9 +72,9 @@ const RoleSelection = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.logoContainer}>
-        <Image source={require('../../assets/logo.png')} style={styles.logo} accessibilityLabel="App logo" />
-        <Text style={styles.title}>Alelo</Text>
-        <Text style={styles.subtitle}>Connect with local vendors in real-time</Text>
+      <Image source={{ uri: "https://yrpfcforiwwwrvcanyhb.supabase.co/storage/v1/object/public/seller_logos/logo.png" }} style={styles.logo} accessibilityLabel="App logo" />
+      <Text style={styles.title}>Alelo</Text>
+        <Text style={styles.subtitle}>Shop Peacefully at Your Doorstep</Text>
       </View>
 
       <View style={styles.phoneContainer}>
@@ -122,10 +122,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   logo: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 150,
+    height: 150,
     marginBottom: spacing.lg,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: fontSize.xxl,
