@@ -6,10 +6,12 @@ import {
   getCurrentLocation, 
   startLocationTracking,
   updateSellerLocation,
+  updateBuyerLocation,
   getNearbySellersByLocation,
   isLocationServicesEnabled,
   requestLocationPermission,
   getSellerLastLocation,
+  getBuyerLastLocation,
   storeLocationPreference
 } from '../lib/locationService';
 
@@ -23,8 +25,8 @@ interface UseLocationReturn {
   stopTracking: () => void;
   refreshLocation: () => Promise<void>;
   setManualLocation: (location: LocationCoords) => void;
-  loadSavedLocation: (sellerId: string) => Promise<void>;
-  updateLocation: (sellerId: string) => Promise<boolean>;
+  loadSavedLocation: (userId: string, userType?: 'buyer' | 'seller') => Promise<void>;
+  updateLocation: (userId: string, userType?: 'buyer' | 'seller') => Promise<boolean>;
   getNearbySellersByLocation: (radiusKm?: number) => Promise<any[]>;
   checkPermissions: () => Promise<void>;
 }
@@ -76,18 +78,25 @@ export const useLocation = (): UseLocationReturn => {
     }
   };
 
-  const loadSavedLocation = async (sellerId: string): Promise<void> => {
+  const loadSavedLocation = async (userId: string, userType: 'buyer' | 'seller' = 'seller'): Promise<void> => {
     try {
-      console.log('Loading saved location for seller:', sellerId);
-      const savedLocation = await getSellerLastLocation(sellerId);
+      console.log(`Loading saved location for ${userType}:`, userId);
+      
+      let savedLocation: LocationCoords | null = null;
+      
+      if (userType === 'buyer') {
+        savedLocation = await getBuyerLastLocation(userId);
+      } else {
+        savedLocation = await getSellerLastLocation(userId);
+      }
       
       if (savedLocation) {
         setCurrentLocation(savedLocation);
         setIsManualLocation(true); // Assume saved location is manual unless GPS updates it
         setError(null);
-        console.log('Loaded saved location:', savedLocation);
+        console.log(`Loaded saved ${userType} location:`, savedLocation);
       } else {
-        console.log('No saved location found for seller');
+        console.log(`No saved location found for ${userType}`);
       }
     } catch (error) {
       console.error('Error loading saved location:', error);
@@ -184,20 +193,32 @@ export const useLocation = (): UseLocationReturn => {
     }
   };
 
-  const updateLocation = async (sellerId: string): Promise<boolean> => {
+  const updateLocation = async (userId: string, userType: 'buyer' | 'seller' = 'seller'): Promise<boolean> => {
     if (!currentLocation) {
       setError({ code: 'NO_LOCATION', message: 'No current location available' });
       return false;
     }
 
     try {
-      // Store location preference along with the location
-      await storeLocationPreference(sellerId, isManualLocation, currentLocation);
+      // Store location preference along with the location (only for sellers for now)
+      if (userType === 'seller') {
+        await storeLocationPreference(userId, isManualLocation, currentLocation);
+      }
       
-      const success = await updateSellerLocation(sellerId, currentLocation);
+      let success: boolean;
+      
+      if (userType === 'buyer') {
+        success = await updateBuyerLocation(userId, currentLocation);
+      } else {
+        success = await updateSellerLocation(userId, currentLocation);
+      }
+      
       if (!success) {
         setError({ code: 'UPDATE_FAILED', message: 'Failed to update location in database' });
+      } else {
+        console.log(`Successfully updated ${userType} location in database`);
       }
+      
       return success;
     } catch (err) {
       setError({ code: 'UPDATE_ERROR', message: 'Error updating location' });

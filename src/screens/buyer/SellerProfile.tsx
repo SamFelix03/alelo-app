@@ -1,164 +1,271 @@
 "use client"
 
-import { useState } from "react"
-import { View, StyleSheet, Text, Image, TouchableOpacity, FlatList, SafeAreaView, ScrollView } from "react-native"
-import { useNavigation, useRoute } from "@react-navigation/native"
+import { useState, useEffect, useCallback } from "react"
+import { 
+  View, 
+  StyleSheet, 
+  Text, 
+  Image, 
+  TouchableOpacity, 
+  FlatList, 
+  SafeAreaView, 
+  ScrollView, 
+  ActivityIndicator,
+  Alert,
+  Platform 
+} from "react-native"
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import { useAuth } from "../../context/AuthContext"
+import { supabase } from "../../lib/supabase"
 
-// Mock data for products
-const MOCK_PRODUCTS = [
-  {
-    id: "1",
-    name: "Fresh Tomatoes",
-    image: "https://via.placeholder.com/150?text=Tomatoes",
-    price: "$2.50/kg",
-    inStock: true,
-  },
-  {
-    id: "2",
-    name: "Organic Apples",
-    image: "https://via.placeholder.com/150?text=Apples",
-    price: "$3.00/kg",
-    inStock: true,
-  },
-  {
-    id: "3",
-    name: "Fresh Bread",
-    image: "https://via.placeholder.com/150?text=Bread",
-    price: "$2.00/loaf",
-    inStock: false,
-  },
-  {
-    id: "4",
-    name: "Milk",
-    image: "https://via.placeholder.com/150?text=Milk",
-    price: "$1.50/liter",
-    inStock: true,
-  },
-  {
-    id: "5",
-    name: "Eggs",
-    image: "https://via.placeholder.com/150?text=Eggs",
-    price: "$3.50/dozen",
-    inStock: true,
-  },
-  {
-    id: "6",
-    name: "Potatoes",
-    image: "https://via.placeholder.com/150?text=Potatoes",
-    price: "$1.20/kg",
-    inStock: true,
-  },
-]
+interface Product {
+  product_id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  price: number;
+  price_unit: string;
+  product_type: string;
+  is_available: boolean;
+}
+
+interface Seller {
+  seller_id: string;
+  name: string;
+  logo_url: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  distance: number;
+  is_open: boolean;
+}
 
 const SellerProfile = () => {
   const navigation = useNavigation()
   const route = useRoute()
-  const { seller } = route.params
+  const { userInfo } = useAuth()
+  const { seller } = route.params as { seller: Seller }
 
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
   const [isLiked, setIsLiked] = useState(false)
-  const [viewMode, setViewMode] = useState("grid") // 'grid' or 'list'
-  const [cart, setCart] = useState([])
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
-  const toggleLike = () => {
-    setIsLiked(!isLiked)
-  }
+  // Load seller data and products when screen loads
+  useEffect(() => {
+    fetchSellerProducts()
+    checkIfLiked()
+  }, [])
 
-  const toggleViewMode = () => {
-    setViewMode(viewMode === "grid" ? "list" : "grid")
-  }
-
-  const addToCart = (product) => {
-    const existingItem = cart.find((item) => item.id === product.id)
-
-    if (existingItem) {
-      const updatedCart = cart.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item))
-      setCart(updatedCart)
-    } else {
-      setCart([...cart, { ...product, quantity: 1 }])
-    }
-  }
-
-  const navigateToCart = () => {
-    if (cart.length > 0) {
-      navigation.navigate("CartScreen", { cart, seller })
-    }
-  }
-
-  const getTotalItems = () => {
-    return cart.reduce((total, item) => total + item.quantity, 0)
-  }
-
-  const renderGridItem = ({ item }) => (
-    <View style={styles.gridItem}>
-      <View style={[styles.productCard, !item.inStock && styles.productCardOutOfStock]}>
-        {!item.inStock && (
-          <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockText}>Out of Stock</Text>
-          </View>
-        )}
-
-        <Image source={{ uri: item.image }} style={styles.productImage} accessibilityLabel={`${item.name} image`} />
-
-        <View style={styles.productInfo}>
-          <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.productPrice}>{item.price}</Text>
-        </View>
-
-        {item.inStock && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => addToCart(item)}
-            accessibilityLabel={`Add ${item.name} to cart`}
-          >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchSellerProducts()
+    }, [])
   )
 
-  const renderListItem = ({ item }) => (
-    <View style={[styles.listItem, !item.inStock && styles.listItemOutOfStock]}>
-      {!item.inStock && (
-        <View style={styles.outOfStockOverlayList}>
-          <Text style={styles.outOfStockText}>Out of Stock</Text>
-        </View>
-      )}
+  const fetchSellerProducts = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('seller_id', seller.seller_id)
+        .eq('is_available', true)
+        .order('created_at', { ascending: false })
 
-      <Image source={{ uri: item.image }} style={styles.listItemImage} accessibilityLabel={`${item.name} image`} />
+      if (error) {
+        console.error('Error fetching products:', error)
+        Alert.alert('Error', 'Failed to load products. Please try again.')
+        return
+      }
+
+      setProducts(data || [])
+      console.log(`Loaded ${(data || []).length} products for seller ${seller.name}`)
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      Alert.alert('Error', 'Failed to load products.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const checkIfLiked = async () => {
+    if (!userInfo?.profileData?.buyer_id) return
+
+    try {
+      const { data, error } = await supabase
+        .from('buyer_liked_sellers')
+        .select('seller_id')
+        .eq('buyer_id', userInfo.profileData.buyer_id)
+        .eq('seller_id', seller.seller_id)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking like status:', error)
+        return
+      }
+
+      setIsLiked(!!data)
+    } catch (error) {
+      console.error('Error checking like status:', error)
+    }
+  }
+
+  const toggleLike = async () => {
+    if (!userInfo?.profileData?.buyer_id) return
+
+    try {
+      if (isLiked) {
+        // Unlike
+        const { error } = await supabase
+          .from('buyer_liked_sellers')
+          .delete()
+          .eq('buyer_id', userInfo.profileData.buyer_id)
+          .eq('seller_id', seller.seller_id)
+
+        if (error) {
+          console.error('Error unliking seller:', error)
+          Alert.alert('Error', 'Failed to unlike seller.')
+          return
+        }
+
+        setIsLiked(false)
+      } else {
+        // Like
+        const { error } = await supabase
+          .from('buyer_liked_sellers')
+          .insert({
+            buyer_id: userInfo.profileData.buyer_id,
+            seller_id: seller.seller_id
+          })
+
+        if (error) {
+          console.error('Error liking seller:', error)
+          Alert.alert('Error', 'Failed to like seller.')
+          return
+        }
+
+        setIsLiked(true)
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error)
+      Alert.alert('Error', 'Failed to update like status.')
+    }
+  }
+
+  const navigateToProductDetail = (product: Product) => {
+    // Convert single product to aggregated format for ProductDetail screen
+    const aggregatedProduct = {
+      product_name: product.name,
+      product_description: product.description,
+      product_image_url: product.image_url,
+      product_type: product.product_type,
+      price_unit: product.price_unit,
+      min_price: product.price,
+      max_price: product.price,
+      seller_count: 1,
+      sellers_info: [{
+        seller_id: seller.seller_id,
+        seller_name: seller.name,
+        seller_logo: seller.logo_url,
+        price: product.price,
+        is_open: seller.is_open
+      }]
+    }
+
+    // @ts-ignore - Navigation type issue
+    navigation.navigate("ProductDetail", { product: aggregatedProduct })
+  }
+
+  const formatDistance = (meters: number): string => {
+    if (meters < 1000) {
+      return `${Math.round(meters)}m away`
+    } else {
+      return `${(meters / 1000).toFixed(1)}km away`
+    }
+  }
+
+  const formatPrice = (price: number, priceUnit: string): string => {
+    return `$${price.toFixed(2)}/${priceUnit}`
+  }
+
+  const renderGridItem = ({ item }: { item: Product }) => (
+    <TouchableOpacity 
+      style={styles.gridItem}
+      onPress={() => navigateToProductDetail(item)}
+      accessibilityLabel={`View ${item.name} details`}
+    >
+      <View style={styles.productCard}>
+        <Image 
+          source={{ 
+            uri: item.image_url || `https://via.placeholder.com/150?text=${item.name.charAt(0)}` 
+          }} 
+          style={styles.productImage} 
+          accessibilityLabel={`${item.name} image`} 
+        />
+
+        <View style={styles.productInfo}>
+          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.productPrice}>{formatPrice(item.price, item.price_unit)}</Text>
+          {item.description && (
+            <Text style={styles.productDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  )
+
+  const renderListItem = ({ item }: { item: Product }) => (
+    <TouchableOpacity 
+      style={styles.listItem}
+      onPress={() => navigateToProductDetail(item)}
+      accessibilityLabel={`View ${item.name} details`}
+    >
+      <Image 
+        source={{ 
+          uri: item.image_url || `https://via.placeholder.com/80?text=${item.name.charAt(0)}` 
+        }} 
+        style={styles.listItemImage} 
+        accessibilityLabel={`${item.name} image`} 
+      />
 
       <View style={styles.listItemInfo}>
         <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>{item.price}</Text>
+        <Text style={styles.productPrice}>{formatPrice(item.price, item.price_unit)}</Text>
+        {item.description && (
+          <Text style={styles.productDescription} numberOfLines={2}>
+            {item.description}
+          </Text>
+        )}
       </View>
 
-      {item.inStock && (
-        <TouchableOpacity
-          style={styles.addButtonList}
-          onPress={() => addToCart(item)}
-          accessibilityLabel={`Add ${item.name} to cart`}
-        >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      )}
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.placeholder} />
+    </TouchableOpacity>
+  )
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="storefront-outline" size={50} color={theme.colors.disabled} />
+      <Text style={styles.emptyText}>No products available</Text>
+      <Text style={styles.emptySubtext}>
+        This vendor doesn't have any products listed at the moment
+      </Text>
     </View>
   )
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header with cover and seller info */}
         <View style={styles.header}>
-          <Image
-            source={{ uri: "https://via.placeholder.com/400x150?text=Cover+Photo" }}
-            style={styles.coverPhoto}
-            accessibilityLabel="Seller cover photo"
-          />
-
           <View style={styles.headerButtons}>
             <TouchableOpacity
-              style={styles.backButton}
+              style={styles.headerButton}
               onPress={() => navigation.goBack()}
               accessibilityLabel="Back button"
             >
@@ -166,7 +273,7 @@ const SellerProfile = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.likeButton}
+              style={styles.headerButton}
               onPress={toggleLike}
               accessibilityLabel={`${isLiked ? "Unlike" : "Like"} seller`}
             >
@@ -178,77 +285,90 @@ const SellerProfile = () => {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.logoContainer}>
-            <Image source={{ uri: seller.logo }} style={styles.sellerLogo} accessibilityLabel="Seller logo" />
-          </View>
-        </View>
-
-        <View style={styles.sellerInfo}>
-          <Text style={styles.sellerName}>{seller.name}</Text>
-
-          <View style={styles.sellerMetaRow}>
-            <View style={styles.distanceContainer}>
-              <Ionicons name="location" size={16} color={theme.colors.placeholder} />
-              <Text style={styles.distanceText}>{seller.distance}</Text>
-            </View>
-
-            {seller.rating && (
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.ratingText}>{seller.rating}</Text>
+          <View style={styles.sellerInfoHeader}>
+            <Image 
+              source={{ 
+                uri: seller.logo_url || `https://via.placeholder.com/80?text=${seller.name.charAt(0)}` 
+              }} 
+              style={styles.sellerLogo} 
+              accessibilityLabel="Seller logo" 
+            />
+            
+            <View style={styles.sellerDetails}>
+              <Text style={styles.sellerName}>{seller.name}</Text>
+              
+              <View style={styles.sellerMeta}>
+                <View style={styles.distanceContainer}>
+                  <Ionicons name="location" size={16} color="rgba(255, 255, 255, 0.9)" />
+                  <Text style={styles.distanceText}>{formatDistance(seller.distance)}</Text>
+                </View>
               </View>
-            )}
-          </View>
 
-          <View style={[styles.statusBadge, seller.isOpen ? styles.openBadge : styles.closedBadge]}>
-            <Text style={[styles.statusText, seller.isOpen ? styles.openText : styles.closedText]}>
-              {seller.isOpen ? "Open" : "Closed"}
+              {seller.address && (
+                <Text style={styles.sellerAddress} numberOfLines={2}>{seller.address}</Text>
+              )}
+
+              <View style={[styles.statusBadge, seller.is_open ? styles.openBadge : styles.closedBadge]}>
+                <Text style={[styles.statusText, seller.is_open ? styles.openText : styles.closedText]}>
+                  {seller.is_open ? "Open Now" : "Closed"}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Products section */}
+        <View style={styles.productsSection}>
+          <View style={styles.productsHeader}>
+            <Text style={styles.sectionTitle}>
+              Products ({products.length})
             </Text>
-            <Text style={styles.hoursText}>{seller.isOpen ? "Closes at 8:00 PM" : "Opens tomorrow at 8:00 AM"}</Text>
+
+            <TouchableOpacity
+              style={styles.viewModeButton}
+              onPress={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+              accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
+            >
+              <Ionicons 
+                name={viewMode === "grid" ? "list" : "grid"} 
+                size={20} 
+                color={theme.colors.text} 
+              />
+            </TouchableOpacity>
           </View>
+
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={styles.loadingText}>Loading products...</Text>
+            </View>
+          ) : products.length === 0 ? (
+            renderEmptyState()
+          ) : viewMode === "grid" ? (
+            <FlatList
+              key="grid"
+              data={products}
+              renderItem={renderGridItem}
+              keyExtractor={(item) => item.product_id}
+              numColumns={2}
+              contentContainerStyle={styles.productsGrid}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <FlatList
+              key="list"
+              data={products}
+              renderItem={renderListItem}
+              keyExtractor={(item) => item.product_id}
+              numColumns={1}
+              contentContainerStyle={styles.productsList}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
         </View>
-
-        <View style={styles.productsHeader}>
-          <Text style={styles.sectionTitle}>Products</Text>
-
-          <TouchableOpacity
-            style={styles.viewModeButton}
-            onPress={toggleViewMode}
-            accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
-          >
-            <Ionicons name={viewMode === "grid" ? "list" : "grid"} size={20} color={theme.colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        {viewMode === "grid" ? (
-          <FlatList
-            data={MOCK_PRODUCTS}
-            renderItem={renderGridItem}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={styles.productsGrid}
-            scrollEnabled={false}
-          />
-        ) : (
-          <FlatList
-            data={MOCK_PRODUCTS}
-            renderItem={renderListItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.productsList}
-            scrollEnabled={false}
-          />
-        )}
       </ScrollView>
-
-      {cart.length > 0 && (
-        <TouchableOpacity style={styles.cartButton} onPress={navigateToCart} accessibilityLabel="View cart button">
-          <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-          </View>
-          <Ionicons name="cart" size={24} color="#FFFFFF" />
-          <Text style={styles.cartText}>View Cart</Text>
-        </TouchableOpacity>
-      )}
     </SafeAreaView>
   )
 }
@@ -259,23 +379,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   header: {
-    position: "relative",
-  },
-  coverPhoto: {
-    width: "100%",
-    height: 150,
-    resizeMode: "cover",
+    backgroundColor: theme.colors.primary,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: spacing.xl,
   },
   headerButtons: {
-    position: "absolute",
-    top: spacing.md,
-    left: 0,
-    right: 0,
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
   },
-  backButton: {
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -283,100 +397,111 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  likeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
+  sellerInfoHeader: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
     alignItems: "center",
-  },
-  logoContainer: {
-    position: "absolute",
-    bottom: -40,
-    alignSelf: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 50,
-    padding: 5,
   },
   sellerLogo: {
     width: 80,
     height: 80,
     borderRadius: 40,
+    marginRight: spacing.md,
+    backgroundColor: "#FFFFFF",
   },
-  sellerInfo: {
-    marginTop: 50,
-    padding: spacing.lg,
-    alignItems: "center",
+  sellerDetails: {
+    flex: 1,
   },
   sellerName: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFFFFF",
     marginBottom: spacing.xs,
   },
-  sellerMetaRow: {
+  sellerMeta: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginRight: spacing.md,
   },
   distanceText: {
     fontSize: fontSize.sm,
-    color: theme.colors.placeholder,
+    color: "rgba(255, 255, 255, 0.9)",
     marginLeft: 4,
+    fontWeight: "500",
   },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ratingText: {
+  sellerAddress: {
     fontSize: fontSize.sm,
-    marginLeft: 4,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginBottom: spacing.md,
+    lineHeight: 20,
+    fontWeight: "400",
   },
   statusBadge: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 8,
-    alignItems: "center",
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   openBadge: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#FFFFFF",
   },
   closedBadge: {
-    backgroundColor: "#FFEBEE",
+    backgroundColor: "#FFFFFF",
   },
   statusText: {
     fontSize: fontSize.sm,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   openText: {
-    color: theme.colors.primary,
+    color: "#4CAF50",
   },
   closedText: {
-    color: theme.colors.error,
+    color: "#F44336",
   },
-  hoursText: {
-    fontSize: fontSize.xs,
-    color: theme.colors.placeholder,
-    marginTop: 2,
+  productsSection: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   productsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
   sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: "bold",
+    color: theme.colors.text,
   },
   viewModeButton: {
     padding: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: "#F5F5F5",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+    minHeight: 200,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
   },
   productsGrid: {
     padding: spacing.md,
@@ -395,57 +520,32 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  productCardOutOfStock: {
-    opacity: 0.7,
-  },
-  outOfStockOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1,
-  },
-  outOfStockText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    fontSize: fontSize.sm,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 4,
-  },
   productImage: {
     width: "100%",
     height: 120,
     resizeMode: "cover",
+    backgroundColor: "#F5F5F5",
   },
   productInfo: {
     padding: spacing.md,
   },
   productName: {
     fontSize: fontSize.md,
-    fontWeight: "bold",
+    fontWeight: "600",
+    color: theme.colors.text,
     marginBottom: spacing.xs,
+    lineHeight: 20,
   },
   productPrice: {
     fontSize: fontSize.sm,
     color: theme.colors.primary,
-    fontWeight: "bold",
+    fontWeight: "700",
+    marginBottom: spacing.xs,
   },
-  addButton: {
-    position: "absolute",
-    bottom: spacing.md,
-    right: spacing.md,
-    backgroundColor: theme.colors.primary,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
+  productDescription: {
+    fontSize: fontSize.xs,
+    color: theme.colors.placeholder,
+    lineHeight: 16,
   },
   productsList: {
     padding: spacing.md,
@@ -456,83 +556,42 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: spacing.md,
     marginBottom: spacing.md,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  listItemOutOfStock: {
-    opacity: 0.7,
-  },
-  outOfStockOverlayList: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
     alignItems: "center",
-    zIndex: 1,
-    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   listItemImage: {
-    width: 80,
-    height: 80,
+    width: 60,
+    height: 60,
     borderRadius: 8,
     marginRight: spacing.md,
+    backgroundColor: "#F5F5F5",
   },
   listItemInfo: {
     flex: 1,
-    justifyContent: "center",
   },
-  addButtonList: {
-    backgroundColor: theme.colors.primary,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  emptyContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    alignSelf: "center",
+    padding: spacing.xl,
+    minHeight: 200,
   },
-  cartButton: {
-    position: "absolute",
-    bottom: spacing.lg,
-    alignSelf: "center",
-    backgroundColor: theme.colors.primary,
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: 30,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  cartBadge: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-    backgroundColor: theme.colors.error,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cartBadgeText: {
-    color: "#FFFFFF",
-    fontSize: fontSize.xs,
+  emptyText: {
+    fontSize: fontSize.lg,
     fontWeight: "bold",
+    marginTop: spacing.md,
+    color: theme.colors.text,
   },
-  cartText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
+  emptySubtext: {
     fontSize: fontSize.md,
-    marginLeft: spacing.md,
+    color: theme.colors.placeholder,
+    textAlign: "center",
+    marginTop: spacing.sm,
+    lineHeight: 22,
   },
 })
 

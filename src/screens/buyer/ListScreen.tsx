@@ -1,112 +1,328 @@
 "use client"
 
-import { useState } from "react"
-import { View, StyleSheet, Text, TextInput, FlatList, TouchableOpacity, Image, SafeAreaView } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { useState, useEffect, useCallback } from "react"
+import { 
+  View, 
+  StyleSheet, 
+  Text, 
+  TextInput, 
+  FlatList, 
+  TouchableOpacity, 
+  Image, 
+  SafeAreaView, 
+  Alert,
+  ActivityIndicator,
+  Platform,
+  RefreshControl
+} from "react-native"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps"
+import { useLocation } from "../../hooks/useLocation"
+import { useAuth } from "../../context/AuthContext"
+import { supabase } from "../../lib/supabase"
+import LocationPicker from "../../components/LocationPicker"
+import { LocationCoords } from "../../lib/locationService"
 
-// Mock data for sellers
-const MOCK_SELLERS = [
-  {
-    id: "1",
-    name: "Fresh Veggies",
-    logo: "https://via.placeholder.com/50?text=FV",
-    distance: "0.5 km",
-    rating: 4.8,
-    isOpen: true,
-    isLiked: true,
-  },
-  {
-    id: "2",
-    name: "Fruit Paradise",
-    logo: "https://via.placeholder.com/50?text=FP",
-    distance: "0.8 km",
-    rating: 4.5,
-    isOpen: true,
-    isLiked: false,
-  },
-  {
-    id: "3",
-    name: "Bakery on Wheels",
-    logo: "https://via.placeholder.com/50?text=BW",
-    distance: "1.2 km",
-    rating: 4.2,
-    isOpen: false,
-    isLiked: true,
-  },
-  {
-    id: "4",
-    name: "Dairy Delights",
-    logo: "https://via.placeholder.com/50?text=DD",
-    distance: "1.5 km",
-    rating: 4.0,
-    isOpen: true,
-    isLiked: false,
-  },
-  {
-    id: "5",
-    name: "Spice Market",
-    logo: "https://via.placeholder.com/50?text=SM",
-    distance: "2.0 km",
-    rating: 4.7,
-    isOpen: true,
-    isLiked: false,
-  },
-]
+interface Seller {
+  seller_id: string;
+  name: string;
+  logo_url: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  distance: number; // in meters
+  is_open: boolean;
+  rating?: number;
+}
+
+type ViewMode = 'list' | 'map';
+type SortBy = 'distance' | 'rating' | 'name';
 
 const ListScreen = () => {
   const navigation = useNavigation()
+  const { userInfo } = useAuth()
+  const { 
+    currentLocation, 
+    isLoading: locationLoading, 
+    error: locationError, 
+    hasPermission,
+    isManualLocation,
+    refreshLocation,
+    checkPermissions,
+    setManualLocation,
+    updateLocation,
+    loadSavedLocation
+  } = useLocation()
+
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [searchQuery, setSearchQuery] = useState("")
-  const [sortBy, setSortBy] = useState("distance") // 'distance', 'rating', 'popularity'
-  const [sellers, setSellers] = useState(MOCK_SELLERS)
+  const [sortBy, setSortBy] = useState<SortBy>("distance")
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [filteredSellers, setFilteredSellers] = useState<Seller[]>([])
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
+  const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null)
+  const [likedSellers, setLikedSellers] = useState<Set<string>>(new Set())
 
-  const handleSearch = (text) => {
-    setSearchQuery(text)
+  const SEARCH_RADIUS = 500 // 500 meters
 
-    if (text.trim() === "") {
-      setSellers(MOCK_SELLERS)
-      return
+  // Load buyer's saved location when component mounts
+  useEffect(() => {
+    const loadBuyerData = async () => {
+      if (userInfo?.profileData?.buyer_id) {
+        // Load saved location from database with buyer type
+        await loadSavedLocation(userInfo.profileData.buyer_id, 'buyer');
+        console.log('Loaded buyer saved location');
+        
+        // Load liked sellers
+        await loadLikedSellers();
+      }
+    };
+
+    loadBuyerData();
+  }, [userInfo?.profileData?.buyer_id]);
+
+  // Load initial location and check permissions
+  useEffect(() => {
+    const initializeLocation = async () => {
+      if (!hasPermission) {
+        await checkPermissions()
+      }
+      if (!currentLocation) {
+        await refreshLocation()
+      }
     }
+    initializeLocation()
+  }, [])
 
-    const filtered = MOCK_SELLERS.filter((seller) => seller.name.toLowerCase().includes(text.toLowerCase()))
-
-    setSellers(filtered)
-  }
-
-  const handleSort = (sortType) => {
-    setSortBy(sortType)
-
-    const sorted = [...sellers]
-
-    if (sortType === "distance") {
-      sorted.sort((a, b) => Number.parseFloat(a.distance) - Number.parseFloat(b.distance))
-    } else if (sortType === "rating") {
-      sorted.sort((a, b) => b.rating - a.rating)
-    } else if (sortType === "popularity") {
-      // In a real app, this would sort by popularity metrics
-      // For this example, we'll just use a random sort
-      sorted.sort(() => Math.random() - 0.5)
+  // Fetch sellers when location is available
+  useEffect(() => {
+    if (currentLocation) {
+      fetchNearbySellers()
     }
+  }, [currentLocation])
 
-    setSellers(sorted)
-  }
+  // Refresh sellers when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (currentLocation) {
+        fetchNearbySellers()
+      }
+      // Refresh liked sellers when screen comes into focus
+      if (userInfo?.profileData?.buyer_id) {
+        loadLikedSellers()
+      }
+    }, [currentLocation, userInfo?.profileData?.buyer_id])
+  )
 
-  const toggleLike = (id) => {
-    const updatedSellers = sellers.map((seller) =>
-      seller.id === id ? { ...seller, isLiked: !seller.isLiked } : seller,
+  // Update location in database when location changes
+  useEffect(() => {
+    if (currentLocation && userInfo?.profileData?.buyer_id) {
+      updateLocation(userInfo.profileData.buyer_id, 'buyer')
+    }
+  }, [currentLocation, userInfo?.profileData?.buyer_id])
+
+  // Filter and sort sellers when search or sort changes
+  useEffect(() => {
+    let filtered = sellers.filter(seller => 
+      seller.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
-    setSellers(updatedSellers)
+    // Sort filtered results
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'distance':
+          return a.distance - b.distance
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0)
+        case 'name':
+          return a.name.localeCompare(b.name)
+        default:
+          return 0
+      }
+    })
+
+    setFilteredSellers(filtered)
+  }, [sellers, searchQuery, sortBy])
+
+  const fetchNearbySellers = async (isRefresh: boolean = false) => {
+    if (!currentLocation) return
+
+    if (isRefresh) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
+
+    try {
+      // Use PostGIS ST_DWithin to find sellers within radius
+      const { data, error } = await supabase.rpc('find_nearby_sellers', {
+        buyer_lat: currentLocation.latitude,
+        buyer_lng: currentLocation.longitude,
+        radius_km: SEARCH_RADIUS / 1000 // Convert meters to kilometers
+      })
+
+      if (error) {
+        console.error('Error fetching nearby sellers:', error)
+        Alert.alert('Error', 'Failed to fetch nearby sellers. Please try again.')
+        return
+      }
+
+      const sellersData: Seller[] = (data || []).map((seller: any) => ({
+        seller_id: seller.seller_id,
+        name: seller.name,
+        logo_url: seller.logo_url,
+        address: seller.address,
+        latitude: seller.latitude,
+        longitude: seller.longitude,
+        distance: seller.distance_km * 1000, // Convert back to meters for consistency
+        is_open: seller.is_open,
+        rating: seller.rating || 4.5 // Default rating for now
+      }))
+
+      setSellers(sellersData)
+      console.log(`Found ${sellersData.length} sellers within ${SEARCH_RADIUS}m`)
+    } catch (error) {
+      console.error('Error fetching sellers:', error)
+      Alert.alert('Error', 'Failed to fetch nearby sellers.')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
-  const navigateToSellerProfile = (seller) => {
+  const handleRefresh = () => {
+    fetchNearbySellers(true)
+  }
+
+  const handleLocationRequest = () => {
+    Alert.alert(
+      "Location Required",
+      "We need your location to show nearby vendors. Would you like to enable location access or set your location manually?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Enable GPS",
+          onPress: async () => {
+            await checkPermissions()
+            if (hasPermission) {
+              await refreshLocation()
+            }
+          }
+        },
+        {
+          text: "Set Manually",
+          onPress: () => setShowLocationPicker(true)
+        }
+      ]
+    )
+  }
+
+  const handleLocationSelected = async (location: LocationCoords) => {
+    setManualLocation(location)
+    setShowLocationPicker(false)
+    
+    // Immediately save the manual location to database
+    if (userInfo?.profileData?.buyer_id) {
+      await updateLocation(userInfo.profileData.buyer_id, 'buyer');
+      console.log('Manual location saved to database');
+    }
+    
+    // Fetch sellers with the new location
+    console.log('Fetching sellers with manual location:', location);
+  }
+
+  const handleLocationPickerCancel = () => {
+    setShowLocationPicker(false)
+  }
+
+  const handleSearch = (text: string) => {
+    setSearchQuery(text)
+  }
+
+  const handleSort = (sortType: SortBy) => {
+    setSortBy(sortType)
+  }
+
+  const toggleLike = async (sellerId: string) => {
+    if (!userInfo?.profileData?.buyer_id) return
+
+    const isCurrentlyLiked = likedSellers.has(sellerId)
+
+    try {
+      if (isCurrentlyLiked) {
+        // Unlike: Remove from database
+        const { error } = await supabase
+          .from('buyer_liked_sellers')
+          .delete()
+          .eq('buyer_id', userInfo.profileData.buyer_id)
+          .eq('seller_id', sellerId)
+
+        if (error) {
+          console.error('Error unliking seller:', error)
+          Alert.alert('Error', 'Failed to unlike seller. Please try again.')
+          return
+        }
+
+        // Update local state
+        const newLiked = new Set(likedSellers)
+        newLiked.delete(sellerId)
+        setLikedSellers(newLiked)
+      } else {
+        // Like: Add to database
+        const { error } = await supabase
+          .from('buyer_liked_sellers')
+          .insert({
+            buyer_id: userInfo.profileData.buyer_id,
+            seller_id: sellerId
+          })
+
+        if (error) {
+          console.error('Error liking seller:', error)
+          Alert.alert('Error', 'Failed to like seller. Please try again.')
+          return
+        }
+
+        // Update local state
+        const newLiked = new Set(likedSellers)
+        newLiked.add(sellerId)
+        setLikedSellers(newLiked)
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error)
+      Alert.alert('Error', 'Failed to update like status.')
+    }
+  }
+
+  const navigateToSellerProfile = (seller: Seller) => {
+    // @ts-ignore - Navigation type issue, will be fixed with proper navigation types
     navigation.navigate("SellerProfile", { seller })
   }
 
-  const renderSellerItem = ({ item }) => (
+  const handleSellerMarkerPress = (seller: Seller) => {
+    setSelectedSeller(seller)
+  }
+
+  const formatDistance = (meters: number): string => {
+    if (meters < 1000) {
+      return `${Math.round(meters)}m`
+    } else {
+      return `${(meters / 1000).toFixed(1)}km`
+    }
+  }
+
+  const renderSellerItem = ({ item }: { item: Seller }) => (
     <View style={styles.sellerCard}>
-      <Image source={{ uri: item.logo }} style={styles.sellerLogo} accessibilityLabel={`${item.name} logo`} />
+      <Image 
+        source={{ 
+          uri: item.logo_url || `https://via.placeholder.com/60?text=${item.name.charAt(0)}` 
+        }} 
+        style={styles.sellerLogo} 
+        accessibilityLabel={`${item.name} logo`} 
+      />
 
       <View style={styles.sellerInfo}>
         <Text style={styles.sellerName}>{item.name}</Text>
@@ -114,20 +330,24 @@ const ListScreen = () => {
         <View style={styles.sellerMetaRow}>
           <View style={styles.distanceContainer}>
             <Ionicons name="location" size={14} color={theme.colors.placeholder} />
-            <Text style={styles.distanceText}>{item.distance}</Text>
+            <Text style={styles.distanceText}>{formatDistance(item.distance)}</Text>
           </View>
 
           {item.rating && (
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={14} color="#FFD700" />
-              <Text style={styles.ratingText}>{item.rating}</Text>
+              <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
             </View>
           )}
         </View>
 
-        <View style={[styles.statusBadge, item.isOpen ? styles.openBadge : styles.closedBadge]}>
-          <Text style={[styles.statusText, item.isOpen ? styles.openText : styles.closedText]}>
-            {item.isOpen ? "Open" : "Closed"}
+        {item.address && (
+          <Text style={styles.sellerAddress} numberOfLines={1}>{item.address}</Text>
+        )}
+
+        <View style={[styles.statusBadge, item.is_open ? styles.openBadge : styles.closedBadge]}>
+          <Text style={[styles.statusText, item.is_open ? styles.openText : styles.closedText]}>
+            {item.is_open ? "Open" : "Closed"}
           </Text>
         </View>
       </View>
@@ -135,99 +355,336 @@ const ListScreen = () => {
       <View style={styles.sellerActions}>
         <TouchableOpacity
           style={styles.likeButton}
-          onPress={() => toggleLike(item.id)}
-          accessibilityLabel={`${item.isLiked ? "Unlike" : "Like"} ${item.name}`}
+          onPress={() => toggleLike(item.seller_id)}
+          accessibilityLabel={`${likedSellers.has(item.seller_id) ? "Unlike" : "Like"} ${item.name}`}
         >
           <Ionicons
-            name={item.isLiked ? "heart" : "heart-outline"}
+            name={likedSellers.has(item.seller_id) ? "heart" : "heart-outline"}
             size={24}
-            color={item.isLiked ? theme.colors.error : theme.colors.text}
+            color={likedSellers.has(item.seller_id) ? theme.colors.error : theme.colors.text}
           />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.viewMenuButton, !item.isOpen && styles.viewMenuButtonDisabled]}
+          style={[styles.viewMenuButton, !item.is_open && styles.viewMenuButtonDisabled]}
           onPress={() => navigateToSellerProfile(item)}
-          disabled={!item.isOpen}
+          disabled={!item.is_open}
           accessibilityLabel={`View ${item.name} menu`}
         >
-          <Text style={[styles.viewMenuText, !item.isOpen && styles.viewMenuTextDisabled]}>View Menu</Text>
+          <Text style={[styles.viewMenuText, !item.is_open && styles.viewMenuTextDisabled]}>
+            View Shop
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   )
 
+  const renderMapView = () => {
+    if (!currentLocation) {
+      return (
+        <View style={styles.noLocationContainer}>
+          <Ionicons name="location-outline" size={50} color={theme.colors.disabled} />
+          <Text style={styles.noLocationText}>Location Required</Text>
+          <Text style={styles.noLocationSubtext}>Enable location to see nearby vendors on the map</Text>
+          <TouchableOpacity style={styles.enableLocationButton} onPress={handleLocationRequest}>
+            <Text style={styles.enableLocationText}>Enable Location</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+
+    const mapRegion = {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      latitudeDelta: 0.01, // Smaller delta for closer zoom
+      longitudeDelta: 0.01,
+    }
+
+    return (
+      <View style={styles.mapContainer}>
+        {/* Selected seller preview - moved to top */}
+        {selectedSeller && (
+          <View style={styles.sellerPreviewTop}>
+            <Image
+              source={{ 
+                uri: selectedSeller.logo_url || `https://via.placeholder.com/50?text=${selectedSeller.name.charAt(0)}` 
+              }}
+              style={styles.previewLogo}
+            />
+            <View style={styles.previewInfo}>
+              <Text style={styles.previewName}>{selectedSeller.name}</Text>
+              <Text style={styles.previewDistance}>{formatDistance(selectedSeller.distance)}</Text>
+              <View style={[
+                styles.previewStatus, 
+                selectedSeller.is_open ? styles.previewStatusOpen : styles.previewStatusClosed
+              ]}>
+                <Text style={[
+                  styles.previewStatusText,
+                  selectedSeller.is_open ? styles.previewStatusTextOpen : styles.previewStatusTextClosed
+                ]}>
+                  {selectedSeller.is_open ? "Open" : "Closed"}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.previewButton, !selectedSeller.is_open && styles.previewButtonDisabled]}
+              onPress={() => navigateToSellerProfile(selectedSeller)}
+              disabled={!selectedSeller.is_open}
+            >
+              <Text style={[styles.previewButtonText, !selectedSeller.is_open && styles.previewButtonTextDisabled]}>
+                View
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.closePreviewButton}
+              onPress={() => setSelectedSeller(null)}
+            >
+              <Ionicons name="close" size={20} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <MapView
+          style={[styles.map, selectedSeller && styles.mapWithTopPreview]}
+          provider={PROVIDER_GOOGLE}
+          region={mapRegion}
+          showsUserLocation={!isManualLocation}
+          showsMyLocationButton={false}
+        >
+          {/* Buyer's location */}
+          <Marker
+            coordinate={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+            }}
+            title="You are here"
+          >
+            <View style={styles.buyerMarker}>
+              <Ionicons name="person" size={16} color="#FFFFFF" />
+            </View>
+          </Marker>
+
+          {/* Search radius circle */}
+          <Circle
+            center={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+            }}
+            radius={SEARCH_RADIUS}
+            strokeColor={theme.colors.primary}
+            fillColor={`${theme.colors.primary}20`}
+            strokeWidth={2}
+          />
+
+          {/* Seller markers */}
+          {filteredSellers.map((seller) => (
+            <Marker
+              key={seller.seller_id}
+              coordinate={{
+                latitude: seller.latitude,
+                longitude: seller.longitude,
+              }}
+              onPress={() => handleSellerMarkerPress(seller)}
+              title={seller.name}
+              description={seller.is_open ? "Open" : "Closed"}
+            >
+              <View style={[
+                styles.sellerMarker, 
+                seller.is_open ? styles.sellerMarkerOpen : styles.sellerMarkerClosed
+              ]}>
+                <Ionicons name="storefront" size={16} color="#FFFFFF" />
+              </View>
+            </Marker>
+          ))}
+        </MapView>
+      </View>
+    )
+  }
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="storefront-outline" size={50} color={theme.colors.disabled} />
+      <Text style={styles.emptyText}>No vendors nearby</Text>
+      <Text style={styles.emptySubtext}>
+        {searchQuery ? "Try adjusting your search" : `No vendors found within ${SEARCH_RADIUS}m`}
+      </Text>
+      {!searchQuery && (
+        <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
+          <Text style={styles.refreshButtonText}>Refresh</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  )
+
+  // Load liked sellers from database
+  const loadLikedSellers = async () => {
+    if (!userInfo?.profileData?.buyer_id) return
+
+    try {
+      const { data, error } = await supabase
+        .from('buyer_liked_sellers')
+        .select('seller_id')
+        .eq('buyer_id', userInfo.profileData.buyer_id)
+
+      if (error) {
+        console.error('Error loading liked sellers:', error)
+        return
+      }
+
+      const likedSellerIds = new Set((data || []).map(item => item.seller_id))
+      setLikedSellers(likedSellerIds)
+      console.log(`Loaded ${likedSellerIds.size} liked sellers`)
+    } catch (error) {
+      console.error('Error loading liked sellers:', error)
+    }
+  }
+
+  if (!currentLocation && !locationLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Nearby Vendors</Text>
+        </View>
+        <View style={styles.noLocationContainer}>
+          <Ionicons name="location-outline" size={50} color={theme.colors.disabled} />
+          <Text style={styles.noLocationText}>Location Required</Text>
+          <Text style={styles.noLocationSubtext}>
+            We need your location to show nearby vendors
+          </Text>
+          <TouchableOpacity style={styles.enableLocationButton} onPress={handleLocationRequest}>
+            <Text style={styles.enableLocationText}>Set Location</Text>
+          </TouchableOpacity>
+        </View>
+        <LocationPicker
+          visible={showLocationPicker}
+          onLocationSelected={handleLocationSelected}
+          onCancel={handleLocationPickerCancel}
+          initialLocation={currentLocation || undefined}
+        />
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Nearby Vendors</Text>
+        {locationLoading && (
+          <Text style={styles.locationStatus}>Getting location...</Text>
+        )}
+        {currentLocation && (
+          <Text style={styles.locationInfo}>
+            {isManualLocation ? "Manual location" : "GPS location"} • {filteredSellers.length} vendors nearby
+          </Text>
+        )}
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search vendors or products"
-            value={searchQuery}
-            onChangeText={handleSearch}
-            accessibilityLabel="Search input"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch("")} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={20} color={theme.colors.placeholder} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {viewMode === 'list' && (
+          <>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search vendors"
+                value={searchQuery}
+                onChangeText={handleSearch}
+                accessibilityLabel="Search input"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => handleSearch("")} accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={20} color={theme.colors.placeholder} />
+                </TouchableOpacity>
+              )}
+            </View>
 
-        <View style={styles.sortContainer}>
-          <Text style={styles.sortLabel}>Sort by:</Text>
+            <View style={styles.sortContainer}>
+              <Text style={styles.sortLabel}>Sort by:</Text>
+              <View style={styles.sortButtons}>
+                <TouchableOpacity
+                  style={[styles.sortButton, sortBy === "distance" && styles.sortButtonActive]}
+                  onPress={() => handleSort("distance")}
+                  accessibilityLabel="Sort by distance"
+                >
+                  <Text style={[styles.sortButtonText, sortBy === "distance" && styles.sortButtonTextActive]}>
+                    Distance
+                  </Text>
+                </TouchableOpacity>
 
-          <View style={styles.sortButtons}>
-            <TouchableOpacity
-              style={[styles.sortButton, sortBy === "distance" && styles.sortButtonActive]}
-              onPress={() => handleSort("distance")}
-              accessibilityLabel="Sort by distance"
-            >
-              <Text style={[styles.sortButtonText, sortBy === "distance" && styles.sortButtonTextActive]}>
-                Distance
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sortButton, sortBy === "rating" && styles.sortButtonActive]}
+                  onPress={() => handleSort("rating")}
+                  accessibilityLabel="Sort by rating"
+                >
+                  <Text style={[styles.sortButtonText, sortBy === "rating" && styles.sortButtonTextActive]}>
+                    Rating
+                  </Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.sortButton, sortBy === "rating" && styles.sortButtonActive]}
-              onPress={() => handleSort("rating")}
-              accessibilityLabel="Sort by rating"
-            >
-              <Text style={[styles.sortButtonText, sortBy === "rating" && styles.sortButtonTextActive]}>Rating</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortButton, sortBy === "popularity" && styles.sortButtonActive]}
-              onPress={() => handleSort("popularity")}
-              accessibilityLabel="Sort by popularity"
-            >
-              <Text style={[styles.sortButtonText, sortBy === "popularity" && styles.sortButtonTextActive]}>
-                Popularity
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                <TouchableOpacity
+                  style={[styles.sortButton, sortBy === "name" && styles.sortButtonActive]}
+                  onPress={() => handleSort("name")}
+                  accessibilityLabel="Sort by name"
+                >
+                  <Text style={[styles.sortButtonText, sortBy === "name" && styles.sortButtonTextActive]}>
+                    Name
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        )}
       </View>
 
-      {sellers.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="search" size={50} color={theme.colors.disabled} />
-          <Text style={styles.emptyText}>No vendors found</Text>
-          <Text style={styles.emptySubtext}>Try adjusting your search</Text>
-        </View>
+      {/* Content based on view mode */}
+      {viewMode === 'list' ? (
+        loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Finding nearby vendors...</Text>
+          </View>
+        ) : filteredSellers.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <FlatList
+            data={filteredSellers}
+            renderItem={renderSellerItem}
+            keyExtractor={(item) => item.seller_id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
+                title="Pull to refresh"
+                titleColor={theme.colors.placeholder}
+              />
+            }
+          />
+        )
       ) : (
-        <FlatList
-          data={sellers}
-          renderItem={renderSellerItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+        renderMapView()
       )}
+
+      {/* View mode toggle button */}
+      <TouchableOpacity
+        style={styles.viewModeButton}
+        onPress={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
+        accessibilityLabel={`Switch to ${viewMode === 'list' ? 'map' : 'list'} view`}
+      >
+        <Ionicons 
+          name={viewMode === 'list' ? 'map' : 'list'} 
+          size={24} 
+          color="#FFFFFF" 
+        />
+      </TouchableOpacity>
+
+      <LocationPicker
+        visible={showLocationPicker}
+        onLocationSelected={handleLocationSelected}
+        onCancel={handleLocationPickerCancel}
+        initialLocation={currentLocation || undefined}
+      />
     </SafeAreaView>
   )
 }
@@ -239,12 +696,25 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: spacing.lg,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
+    paddingTop: Platform.OS === 'ios' ? 60 : spacing.xl,
   },
   title: {
-    fontSize: fontSize.xl,
-    fontWeight: "bold",
+    fontSize: 28,
+    fontWeight: "700",
+    color: theme.colors.text,
+    marginBottom: spacing.sm,
+  },
+  locationStatus: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+    marginBottom: spacing.sm,
+  },
+  locationInfo: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
     marginBottom: spacing.md,
   },
   searchContainer: {
@@ -291,6 +761,17 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "bold",
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
+  },
   listContent: {
     padding: spacing.md,
   },
@@ -311,6 +792,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     marginRight: spacing.md,
+    backgroundColor: "#F5F5F5",
   },
   sellerInfo: {
     flex: 1,
@@ -343,6 +825,11 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: fontSize.sm,
     marginLeft: 2,
+  },
+  sellerAddress: {
+    fontSize: fontSize.xs,
+    color: theme.colors.placeholder,
+    marginBottom: spacing.xs,
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,
@@ -390,6 +877,165 @@ const styles = StyleSheet.create({
   viewMenuTextDisabled: {
     color: "#FFFFFF",
   },
+  mapContainer: {
+    flex: 1,
+  },
+  map: {
+    flex: 1,
+  },
+  mapWithTopPreview: {
+    marginTop: 100, // Adjust this value based on your design
+  },
+  buyerMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#2196F3",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  sellerMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.colors.disabled,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  sellerMarkerOpen: {
+    backgroundColor: theme.colors.primary,
+  },
+  sellerMarkerClosed: {
+    backgroundColor: theme.colors.error,
+  },
+  sellerPreviewTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  previewLogo: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: spacing.md,
+    backgroundColor: "#F5F5F5",
+  },
+  previewInfo: {
+    flex: 1,
+  },
+  previewName: {
+    fontSize: fontSize.md,
+    fontWeight: "bold",
+    marginBottom: 2,
+  },
+  previewDistance: {
+    fontSize: fontSize.sm,
+    color: theme.colors.placeholder,
+    marginBottom: spacing.xs,
+  },
+  previewStatus: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+  },
+  previewStatusOpen: {
+    backgroundColor: "#E8F5E9",
+  },
+  previewStatusClosed: {
+    backgroundColor: "#FFEBEE",
+  },
+  previewStatusText: {
+    fontSize: fontSize.xs,
+    fontWeight: "bold",
+  },
+  previewStatusTextOpen: {
+    color: theme.colors.primary,
+  },
+  previewStatusTextClosed: {
+    color: theme.colors.error,
+  },
+  previewButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+  },
+  previewButtonDisabled: {
+    backgroundColor: theme.colors.disabled,
+  },
+  previewButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: fontSize.sm,
+  },
+  previewButtonTextDisabled: {
+    color: "#FFFFFF",
+  },
+  closePreviewButton: {
+    marginLeft: spacing.md,
+  },
+  viewModeButton: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  noLocationContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  noLocationText: {
+    fontSize: fontSize.lg,
+    fontWeight: "bold",
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  noLocationSubtext: {
+    fontSize: fontSize.md,
+    color: theme.colors.placeholder,
+    textAlign: "center",
+    marginBottom: spacing.lg,
+  },
+  enableLocationButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 8,
+  },
+  enableLocationText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: fontSize.md,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -405,6 +1051,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: theme.colors.placeholder,
     marginTop: spacing.xs,
+    textAlign: "center",
+  },
+  refreshButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 8,
+    marginTop: spacing.lg,
+  },
+  refreshButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: fontSize.md,
   },
 })
 

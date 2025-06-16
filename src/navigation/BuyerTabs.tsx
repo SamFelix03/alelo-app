@@ -1,14 +1,15 @@
+import React from "react"
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
 import { Ionicons, MaterialCommunityIcons, FontAwesome } from "@expo/vector-icons"
 import { View, Text, StyleSheet } from "react-native"
 import { theme } from "../theme"
 
 // Import screens
-import MapScreen from "../screens/buyer/MapScreen"
 import ListScreen from "../screens/buyer/ListScreen"
+import LikedSellersScreen from "../screens/buyer/LikedSellersScreen"
 import ShopScreen from "../screens/buyer/ShopScreen"
 import OrdersScreen from "../screens/buyer/OrdersScreen"
-import ProfileScreen from "../screens/buyer/ProfileScreen"
+import CartScreen from "../screens/buyer/CartScreen"
 import NotificationsScreen from "../screens/buyer/NotificationsScreen"
 
 const Tab = createBottomTabNavigator()
@@ -20,18 +21,18 @@ const BuyerTabs = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let icon = null;
 
-          if (route.name === "Sellers") {
+          if (route.name === "Home") {
             icon = <FontAwesome name="truck" size={22} color={color} />
-          } else if (route.name === "Liked seller") {
-            icon = <Ionicons name="person-add" size={22} color={color} />
+          } else if (route.name === "Liked Sellers") {
+            icon = <Ionicons name={focused ? "heart" : "heart-outline"} size={22} color={color} />
           } else if (route.name === "Shop") {
             icon = <View style={styles.shopIconContainer}>
               <MaterialCommunityIcons name="storefront" size={40} color="#FFFFFF" />
             </View>
+          } else if (route.name === "Orders") {
+            icon = <Ionicons name="receipt" size={22} color={color} />
           } else if (route.name === "Cart") {
             icon = <Ionicons name="cart" size={22} color={color} />
-          } else if (route.name === "Menu") {
-            icon = <Ionicons name="menu" size={22} color={color} />
           }
 
           return (
@@ -48,8 +49,8 @@ const BuyerTabs = () => {
         tabBarShowLabel: false,
       })}
     >
-      <Tab.Screen name="Sellers" component={ListScreen} />
-      <Tab.Screen name="Liked seller" component={MapScreen} />
+      <Tab.Screen name="Home" component={ListScreen} />
+      <Tab.Screen name="Liked Sellers" component={LikedSellersScreen} />
       <Tab.Screen 
         name="Shop" 
         component={ShopScreen} 
@@ -58,14 +59,14 @@ const BuyerTabs = () => {
         }}
       />
       <Tab.Screen
-        name="Cart" 
+        name="Orders" 
         component={OrdersScreen}
         options={{
           tabBarBadge: 2,
           tabBarBadgeStyle: styles.badge,
         }}
       />
-      <Tab.Screen name="Menu" component={ProfileScreen} />
+      <Tab.Screen name="Cart" component={CartScreen} />
     </Tab.Navigator>
   )
 }
