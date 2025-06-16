@@ -143,7 +143,6 @@ const CustomersScreen = () => {
             <Text style={styles.customerName}>{item.buyer_name}</Text>
             <View style={styles.metaInfo}>
               <Text style={styles.distance}>{formatDistance(item.distance_meters)} away</Text>
-              <Text style={styles.lastOrder}>Last order: {formatDate(item.latest_order_date)}</Text>
             </View>
           </View>
           <TouchableOpacity 

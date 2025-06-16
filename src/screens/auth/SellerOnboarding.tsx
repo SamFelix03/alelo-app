@@ -20,6 +20,11 @@ import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
+import * as ImagePicker from 'expo-image-picker'
+import { decode } from 'base64-arraybuffer'
+import LocationPicker from "../../components/LocationPicker"
+import { LocationCoords } from "../../lib/locationService"
+import { storeUserData } from "../../lib/auth"
 
 // Define types for our route params and navigation
 type RootStackParamList = {
@@ -48,21 +53,15 @@ type BusinessHours = {
   sunday: BusinessHoursDay;
 };
 
-// Location type
-type Location = {
-  latitude: number;
-  longitude: number;
-};
-
 const SellerOnboarding = () => {
   const navigation = useNavigation<SellerOnboardingScreenNavigationProp>()
   const route = useRoute<SellerOnboardingScreenRouteProp>()
   const { phoneNumber } = route.params
-  const { refreshUserProfile } = useAuth()
+  const { refreshUserProfile, refreshAuthState } = useAuth()
 
   // State for seller fields that match database schema
   const [name, setName] = useState("")
-  const [location, setLocation] = useState<Location | null>(null)
+  const [location, setLocation] = useState<LocationCoords | null>(null)
   const [address, setAddress] = useState("")
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -76,21 +75,74 @@ const SellerOnboarding = () => {
     sunday: { open: "10:00", close: "15:00", isOpen: false }
   })
   const [loading, setLoading] = useState(false)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
 
   const handleLocationPicker = () => {
-    // In a real app, this would use location services
-    // For this example, we'll just set mock coordinates for San Francisco
-    setLocation({
-      latitude: 37.7749,
-      longitude: -122.4194
-    })
-    Alert.alert("Location Set", "Mock location has been set to San Francisco")
+    setShowLocationPicker(true)
   }
 
-  const handleImagePicker = () => {
-    // In a real app, this would use react-native-image-picker
-    // For this example, we'll just set a placeholder
-    setLogoUrl("https://via.placeholder.com/150")
+  const handleLocationSelected = (selectedLocation: LocationCoords) => {
+    setLocation(selectedLocation)
+    setShowLocationPicker(false)
+  }
+
+  const handleLocationPickerCancel = () => {
+    setShowLocationPicker(false)
+  }
+
+  const handleImagePicker = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Please allow access to your photo library to upload images.")
+        return
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      })
+
+      if (!result.canceled && result.assets[0]) {
+        setIsUploadingImage(true)
+        try {
+          const asset = result.assets[0]
+          
+          // Generate a unique file path using phone number and timestamp
+          const ext = asset.uri.substring(asset.uri.lastIndexOf(".") + 1)
+          const fileName = `sellers/${phoneNumber.replace(/[^\w]/g, '_')}/${Date.now()}.${ext}`
+
+          // Upload the image
+          const { data, error } = await supabase.storage
+            .from('profile_pictures')
+            .upload(fileName, decode(asset.base64!), {
+              contentType: `image/${ext}`,
+              cacheControl: '3600',
+              upsert: false
+            })
+
+          if (error) throw error
+
+          // Get the public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('profile_pictures')
+            .getPublicUrl(fileName)
+
+          setLogoUrl(publicUrl)
+        } catch (error) {
+          console.error('Error uploading image:', error)
+          Alert.alert('Error', 'Failed to upload image. Please try again.')
+        }
+        setIsUploadingImage(false)
+      }
+    } catch (error) {
+      console.error('Error picking image:', error)
+      Alert.alert('Error', 'Failed to pick image. Please try again.')
+    }
   }
 
   const updateBusinessHours = (day: string, field: keyof BusinessHoursDay, value: string | boolean) => {
@@ -140,13 +192,18 @@ const SellerOnboarding = () => {
         return
       }
       
+      // Store authentication data to mark user as logged in
+      const stored = await storeUserData(phoneNumber, 'seller')
+      if (!stored) {
+        Alert.alert("Error", "There was an error saving your session")
+        setLoading(false)
+        return
+      }
+
+      // Refresh the auth state to immediately log the user in
+      await refreshAuthState()
+      
       setLoading(false)
-      
-      // Refresh the user profile in AuthContext to get the latest data
-      await refreshUserProfile();
-      
-      // The AuthNavigator will automatically redirect to SellerTabs
-      // No need to navigate manually
       
     } catch (error) {
       console.error('Error creating seller profile:', error)
@@ -155,29 +212,29 @@ const SellerOnboarding = () => {
     }
   }
 
-        return (
+  return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-            <TouchableOpacity
+        <TouchableOpacity
           style={styles.backButton} 
           onPress={() => navigation.goBack()} 
           accessibilityLabel="Back button"
         >
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
+        </TouchableOpacity>
 
         <Text style={styles.title}>Set Up Your Business</Text>
         <Text style={styles.subtitle}>Please provide the following information</Text>
         
         {/* Business Name Input - matches 'name' field */}
         <Text style={styles.inputLabel}>Business Name</Text>
-            <TextInput
-              placeholder="Business Name"
-              value={name}
-              onChangeText={setName}
+        <TextInput
+          placeholder="Business Name"
+          value={name}
+          onChangeText={setName}
           style={styles.input}
-              accessibilityLabel="Business name input"
-            />
+          accessibilityLabel="Business name input"
+        />
 
         {/* Address Input - matches 'address' field */}
         <Text style={styles.inputLabel}>Business Address</Text>
@@ -192,7 +249,7 @@ const SellerOnboarding = () => {
         
         {/* Location Picker - matches 'current_location' field */}
         <Text style={styles.inputLabel}>Business Location</Text>
-                  <TouchableOpacity
+        <TouchableOpacity
           style={styles.locationButton}
           onPress={handleLocationPicker}
           accessibilityLabel="Set location button"
@@ -200,14 +257,15 @@ const SellerOnboarding = () => {
           <Ionicons name="location" size={20} color={theme.colors.primary} />
           <Text style={styles.locationButtonText}>
             {location ? "Location Selected (Tap to change)" : "Set Your Business Location"}
-                    </Text>
-                  </TouchableOpacity>
+          </Text>
+        </TouchableOpacity>
 
         {/* Logo Upload - matches 'logo_url' field */}
         <Text style={styles.inputLabel}>Business Logo</Text>
-            <TouchableOpacity
+        <TouchableOpacity
           style={styles.imagePickerContainer}
           onPress={handleImagePicker}
+          disabled={isUploadingImage}
           accessibilityLabel="Upload business logo"
         >
           {logoUrl ? (
@@ -216,13 +274,18 @@ const SellerOnboarding = () => {
               style={styles.logoImage}
               accessibilityLabel="Selected business logo"
             />
-              ) : (
+          ) : (
             <View style={styles.imagePlaceholder}>
               <Ionicons name="image" size={40} color={theme.colors.placeholder} />
               <Text style={styles.imagePlaceholderText}>Tap to upload logo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            </View>
+          )}
+          {isUploadingImage && (
+            <View style={styles.uploadingOverlay}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Business Status - matches 'is_open' field */}
         <Text style={styles.inputLabel}>Initial Business Status</Text>
@@ -236,7 +299,7 @@ const SellerOnboarding = () => {
             ios_backgroundColor="#D1D1D1"
             accessibilityLabel="Business status toggle"
           />
-              </View>
+        </View>
 
         {/* Business Hours - matches 'business_hours' field */}
         <Text style={styles.inputLabel}>Business Hours</Text>
@@ -290,6 +353,13 @@ const SellerOnboarding = () => {
           }
         </TouchableOpacity>
       </ScrollView>
+
+      <LocationPicker
+        visible={showLocationPicker}
+        onLocationSelected={handleLocationSelected}
+        onCancel={handleLocationPickerCancel}
+        initialLocation={location || undefined}
+      />
     </SafeAreaView>
   )
 }
@@ -336,6 +406,7 @@ const styles = StyleSheet.create({
   imagePickerContainer: {
     alignSelf: "center",
     marginBottom: spacing.xl,
+    position: "relative",
   },
   logoImage: {
     width: 150,
@@ -356,6 +427,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     color: theme.colors.placeholder,
     fontSize: fontSize.sm,
+  },
+  uploadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 75,
+    justifyContent: "center",
+    alignItems: "center",
   },
   locationButton: {
     flexDirection: "row",

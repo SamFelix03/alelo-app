@@ -4,7 +4,7 @@ export const theme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    primary: "#32CD32", // Green for freshness
+    primary: "#45A19D", // Teal color to match bottom navigation
     secondary: "#FFA500", // Orange for action
     background: "#FFFFFF",
     surface: "#FFFFFF",
