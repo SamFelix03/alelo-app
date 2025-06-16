@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, ActivityIndicator, Modal, TextInput, Platform } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import { signOut } from "../../lib/auth"
@@ -214,6 +214,12 @@ const SellerProfileScreen = () => {
       ]
     );
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshUserProfile();
+    }, [refreshUserProfile])
+  );
 
   return (
     <SafeAreaView style={styles.container}>

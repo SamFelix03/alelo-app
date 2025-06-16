@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "StreetVend",
-    "slug": "street-vend",
-    "version": "1.0.0",
+    "name": "Alelo",
+    "slug": "alelo",
+    "version": "0.0.1",
     "orientation": "portrait",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
       "resizeMode": "contain",
@@ -21,6 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [

@@ -14,6 +14,7 @@ import {
   Platform,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
@@ -260,6 +261,97 @@ const OrdersScreen = () => {
     )
   }
 
+  const handleCallBuyer = (buyerPhone: string, buyerName: string) => {
+    if (!buyerPhone) {
+      Alert.alert('No Phone Number', 'This buyer has no phone number on file.')
+      return
+    }
+
+    Alert.alert(
+      'Call Buyer',
+      `Call ${buyerName} at ${buyerPhone}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Call',
+          onPress: () => {
+            const phoneUrl = `tel:${buyerPhone}`
+            Linking.canOpenURL(phoneUrl)
+              .then((supported) => {
+                if (supported) {
+                  return Linking.openURL(phoneUrl)
+                } else {
+                  Alert.alert('Error', 'Phone calls are not supported on this device.')
+                }
+              })
+              .catch(() => {
+                Alert.alert('Error', 'Failed to make phone call.')
+              })
+          }
+        }
+      ]
+    )
+  }
+
+  const handleNavigateToBuyer = (buyerAddress: string | null, buyerName: string) => {
+    if (!buyerAddress) {
+      Alert.alert('No Address', 'This buyer has no address on file.')
+      return
+    }
+
+    Alert.alert(
+      'Navigate to Buyer',
+      `Navigate to ${buyerName}'s location?\n\n${buyerAddress}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Navigate',
+          onPress: () => {
+            const encodedAddress = encodeURIComponent(buyerAddress)
+            
+            // Try different map apps based on platform
+            const mapUrls = Platform.select({
+              ios: [
+                `maps://app?daddr=${encodedAddress}`, // Apple Maps
+                `comgooglemaps://?daddr=${encodedAddress}`, // Google Maps
+                `https://maps.google.com/maps?daddr=${encodedAddress}` // Web fallback
+              ],
+              android: [
+                `google.navigation:q=${encodedAddress}`, // Google Maps Navigation
+                `geo:0,0?q=${encodedAddress}`, // Generic geo intent
+                `https://maps.google.com/maps?daddr=${encodedAddress}` // Web fallback
+              ]
+            })
+
+            const tryOpenMap = async (urls: string[], index = 0): Promise<void> => {
+              if (index >= urls.length) {
+                Alert.alert('Error', 'No map app available to navigate.')
+                return
+              }
+
+              try {
+                const canOpen = await Linking.canOpenURL(urls[index])
+                if (canOpen) {
+                  await Linking.openURL(urls[index])
+                } else {
+                  await tryOpenMap(urls, index + 1)
+                }
+              } catch (error) {
+                await tryOpenMap(urls, index + 1)
+              }
+            }
+
+            if (mapUrls) {
+              tryOpenMap(mapUrls)
+            } else {
+              Alert.alert('Error', 'Navigation not supported on this platform.')
+            }
+          }
+        }
+      ]
+    )
+  }
+
   const renderOrderItem = (item: OrderItem) => (
     <View key={item.order_item_id} style={styles.orderItem}>
       <Text style={styles.itemQuantity}>{item.quantity}x</Text>
@@ -279,10 +371,29 @@ const OrdersScreen = () => {
             style={styles.buyerAvatar}
             accessibilityLabel={`${item.buyer_name} avatar`}
           />
-          <Text style={styles.buyerName}>{item.buyer_name}</Text>
+          <View style={styles.buyerDetails}>
+            <Text style={styles.buyerName}>{item.buyer_name}</Text>
+            <Text style={styles.orderTime}>{formatDate(item.created_at)}</Text>
+          </View>
         </View>
 
-        <Text style={styles.orderTime}>{formatDate(item.created_at)}</Text>
+        <View style={styles.contactButtons}>
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => handleCallBuyer(item.buyer_phone, item.buyer_name)}
+            accessibilityLabel={`Call ${item.buyer_name}`}
+          >
+            <Ionicons name="call" size={18} color={theme.colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => handleNavigateToBuyer(item.buyer_address, item.buyer_name)}
+            accessibilityLabel={`Navigate to ${item.buyer_name}`}
+          >
+            <Ionicons name="navigate" size={18} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.itemsContainer}>
@@ -348,10 +459,29 @@ const OrdersScreen = () => {
             style={styles.buyerAvatar}
             accessibilityLabel={`${item.buyer_name} avatar`}
           />
-          <Text style={styles.buyerName}>{item.buyer_name}</Text>
+          <View style={styles.buyerDetails}>
+            <Text style={styles.buyerName}>{item.buyer_name}</Text>
+            <Text style={styles.orderTime}>{formatDate(item.created_at)}</Text>
+          </View>
         </View>
 
-        <Text style={styles.orderTime}>{formatDate(item.created_at)}</Text>
+        <View style={styles.contactButtons}>
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => handleCallBuyer(item.buyer_phone, item.buyer_name)}
+            accessibilityLabel={`Call ${item.buyer_name}`}
+          >
+            <Ionicons name="call" size={18} color={theme.colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => handleNavigateToBuyer(item.buyer_address, item.buyer_name)}
+            accessibilityLabel={`Navigate to ${item.buyer_name}`}
+          >
+            <Ionicons name="navigate" size={18} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.itemsContainer}>
@@ -394,10 +524,29 @@ const OrdersScreen = () => {
             style={styles.buyerAvatar}
             accessibilityLabel={`${item.buyer_name} avatar`}
           />
-          <Text style={styles.buyerName}>{item.buyer_name}</Text>
+          <View style={styles.buyerDetails}>
+            <Text style={styles.buyerName}>{item.buyer_name}</Text>
+            <Text style={styles.orderTime}>{formatDate(item.created_at)}</Text>
+          </View>
         </View>
 
-        <Text style={styles.orderTime}>{formatDate(item.created_at)}</Text>
+        <View style={styles.contactButtons}>
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => handleCallBuyer(item.buyer_phone, item.buyer_name)}
+            accessibilityLabel={`Call ${item.buyer_name}`}
+          >
+            <Ionicons name="call" size={18} color={theme.colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => handleNavigateToBuyer(item.buyer_address, item.buyer_name)}
+            accessibilityLabel={`Navigate to ${item.buyer_name}`}
+          >
+            <Ionicons name="navigate" size={18} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.itemsContainer}>
@@ -484,15 +633,24 @@ const OrdersScreen = () => {
       </View>
 
       <View style={styles.tabsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.tabsWrapper}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "pending" && styles.activeTab]}
             onPress={() => setActiveTab("pending")}
             accessibilityLabel="Pending tab"
           >
-            <Text style={[styles.tabText, activeTab === "pending" && styles.activeTabText]}>
-              Pending ({getTabCount('pending')})
-            </Text>
+            <View style={[styles.tabContent, activeTab === "pending" && styles.activeTabContent]}>
+              <Text style={[styles.tabText, activeTab === "pending" && styles.activeTabText]}>
+                Pending
+              </Text>
+              {getTabCount('pending') > 0 && (
+                <View style={[styles.tabBadge, activeTab === "pending" && styles.activeTabBadge]}>
+                  <Text style={[styles.tabBadgeText, activeTab === "pending" && styles.activeTabBadgeText]}>
+                    {getTabCount('pending')}
+                  </Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -500,9 +658,11 @@ const OrdersScreen = () => {
             onPress={() => setActiveTab("history")}
             accessibilityLabel="History tab"
           >
-            <Text style={[styles.tabText, activeTab === "history" && styles.activeTabText]}>
-              History ({getTabCount('history')})
-            </Text>
+            <View style={[styles.tabContent, activeTab === "history" && styles.activeTabContent]}>
+              <Text style={[styles.tabText, activeTab === "history" && styles.activeTabText]}>
+                History
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -510,11 +670,13 @@ const OrdersScreen = () => {
             onPress={() => setActiveTab("cancelled")}
             accessibilityLabel="Cancelled tab"
           >
-            <Text style={[styles.tabText, activeTab === "cancelled" && styles.activeTabText]}>
-              Cancelled ({getTabCount('cancelled')})
-            </Text>
+            <View style={[styles.tabContent, activeTab === "cancelled" && styles.activeTabContent]}>
+              <Text style={[styles.tabText, activeTab === "cancelled" && styles.activeTabText]}>
+                Cancelled
+              </Text>
+            </View>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
 
       <FlatList
@@ -570,24 +732,85 @@ const styles = StyleSheet.create({
     color: theme.colors.placeholder,
   },
   tabsContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    backgroundColor: "#F8F9FA",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  tabsWrapper: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: spacing.xs,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   tab: {
+    flex: 1,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    marginHorizontal: 2,
+    justifyContent: "center",
+    alignItems: "center",
   },
   activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  activeTabContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   tabText: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
     color: theme.colors.placeholder,
   },
   activeTabText: {
-    color: theme.colors.primary,
-    fontWeight: "bold",
+    fontSize: fontSize.sm,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  tabBadge: {
+    backgroundColor: "#E0E0E0",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: spacing.xs,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: spacing.xs,
+  },
+  activeTabBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: spacing.xs,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: spacing.xs,
+  },
+  tabBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
+  activeTabBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   ordersList: {
     padding: spacing.md,
@@ -618,6 +841,9 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: spacing.sm,
+  },
+  buyerDetails: {
+    flexDirection: "column",
   },
   buyerName: {
     fontSize: fontSize.md,
@@ -749,6 +975,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: theme.colors.placeholder,
     marginTop: spacing.xs,
+  },
+  contactButtons: {
+    flexDirection: "row",
+  },
+  contactButton: {
+    padding: spacing.sm,
   },
 })
 

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView, Platform, Alert, AlertButton } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
 import { Ionicons } from "@expo/vector-icons"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
@@ -112,6 +112,32 @@ const DashboardScreen = () => {
 
     loadSellerData();
   }, [userInfo?.profileData?.seller_id]);
+
+  // Refresh business status when screen comes into focus to sync with ProfileScreen changes
+  useFocusEffect(
+    useCallback(() => {
+      const refreshBusinessStatus = async () => {
+        if (userInfo?.profileData?.seller_id) {
+          try {
+            const { data, error } = await supabase
+              .from('sellers')
+              .select('is_open')
+              .eq('seller_id', userInfo.profileData.seller_id)
+              .single();
+
+            if (!error && data) {
+              setIsOpen(data.is_open || false);
+              console.log('Refreshed business status:', data.is_open);
+            }
+          } catch (error) {
+            console.error('Error refreshing business status:', error);
+          }
+        }
+      };
+
+      refreshBusinessStatus();
+    }, [userInfo?.profileData?.seller_id])
+  );
 
   // Update seller's business status in database
   const updateBusinessStatus = async (newStatus: boolean) => {

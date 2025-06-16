@@ -582,7 +582,16 @@ const OrdersScreen = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>My Orders</Text>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              accessibilityLabel="Back button"
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.title}>My Orders</Text>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -595,19 +604,37 @@ const OrdersScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Orders</Text>
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            accessibilityLabel="Back button"
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.title}>My Orders</Text>
+        </View>
       </View>
 
       <View style={styles.tabsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.tabsWrapper}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "pending" && styles.activeTab]}
             onPress={() => setActiveTab("pending")}
             accessibilityLabel="Pending tab"
           >
-            <Text style={[styles.tabText, activeTab === "pending" && styles.activeTabText]}>
-              Pending ({getTabCount('pending')})
-            </Text>
+            <View style={[styles.tabContent, activeTab === "pending" && styles.activeTabContent]}>
+              <Text style={[styles.tabText, activeTab === "pending" && styles.activeTabText]}>
+                Pending
+              </Text>
+              {getTabCount('pending') > 0 && (
+                <View style={[styles.tabBadge, activeTab === "pending" && styles.activeTabBadge]}>
+                  <Text style={[styles.tabBadgeText, activeTab === "pending" && styles.activeTabBadgeText]}>
+                    {getTabCount('pending')}
+                  </Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -615,9 +642,11 @@ const OrdersScreen = () => {
             onPress={() => setActiveTab("completed")}
             accessibilityLabel="Completed tab"
           >
-            <Text style={[styles.tabText, activeTab === "completed" && styles.activeTabText]}>
-              Completed ({getTabCount('completed')})
-            </Text>
+            <View style={[styles.tabContent, activeTab === "completed" && styles.activeTabContent]}>
+              <Text style={[styles.tabText, activeTab === "completed" && styles.activeTabText]}>
+                Completed
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -625,11 +654,13 @@ const OrdersScreen = () => {
             onPress={() => setActiveTab("cancelled")}
             accessibilityLabel="Cancelled tab"
           >
-            <Text style={[styles.tabText, activeTab === "cancelled" && styles.activeTabText]}>
-              Cancelled ({getTabCount('cancelled')})
-            </Text>
+            <View style={[styles.tabContent, activeTab === "cancelled" && styles.activeTabContent]}>
+              <Text style={[styles.tabText, activeTab === "cancelled" && styles.activeTabText]}>
+                Cancelled
+              </Text>
+            </View>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
 
       <FlatList
@@ -669,10 +700,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  backButton: {
+    padding: spacing.xs,
+  },
   title: {
     fontSize: 28,
     fontWeight: "700",
     color: theme.colors.text,
+    marginLeft: spacing.md,
   },
   loadingContainer: {
     flex: 1,
@@ -685,24 +724,85 @@ const styles = StyleSheet.create({
     color: theme.colors.placeholder,
   },
   tabsContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    backgroundColor: "#F8F9FA",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  tabsWrapper: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: spacing.xs,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   tab: {
+    flex: 1,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    marginHorizontal: 2,
+    justifyContent: "center",
+    alignItems: "center",
   },
   activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  activeTabContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   tabText: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
     color: theme.colors.placeholder,
   },
   activeTabText: {
-    color: theme.colors.primary,
-    fontWeight: "bold",
+    fontSize: fontSize.sm,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  tabBadge: {
+    backgroundColor: "#E0E0E0",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: spacing.xs,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: spacing.xs,
+  },
+  activeTabBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: spacing.xs,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: spacing.xs,
+  },
+  tabBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
+  activeTabBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   ordersList: {
     padding: spacing.md,
