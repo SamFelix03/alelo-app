@@ -1,6 +1,6 @@
-# StreetVend - Expo App
+# Alelo -  App
 
-StreetVend is a mobile app that connects street vendors with local customers in real-time. The app supports two user roles:
+Alelo is a mobile app that connects street vendors with local customers in real-time. The app supports two user roles:
 - **Buyers**: Find and purchase from local vendors
 - **Sellers**: Showcase and sell products to nearby customers
 
