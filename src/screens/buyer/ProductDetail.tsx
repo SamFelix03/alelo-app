@@ -15,7 +15,13 @@ import {
 } from "react-native"
 import { useNavigation, useRoute } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  MapPinIcon, 
+  ChevronRightIcon, 
+  ArrowLeftIcon, 
+  MinusIcon, 
+  PlusIcon 
+} from "react-native-heroicons/outline"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
 
@@ -209,7 +215,7 @@ const ProductDetail = () => {
 
         <View style={styles.sellerMetaRow}>
           <View style={styles.distanceContainer}>
-            <Ionicons name="location" size={14} color={theme.colors.placeholder} />
+            <MapPinIcon size={14} color={theme.colors.placeholder} />
             <Text style={styles.distanceText}>{formatDistance(item.seller_id)}</Text>
           </View>
         </View>
@@ -230,7 +236,7 @@ const ProductDetail = () => {
         onPress={() => navigateToSellerProfile(item)}
         accessibilityLabel={`View ${item.seller_name} profile`}
       >
-        <Ionicons name="chevron-forward" size={20} color={theme.colors.primary} />
+        <ChevronRightIcon size={20} color={theme.colors.primary} />
       </TouchableOpacity>
     </TouchableOpacity>
   )
@@ -244,7 +250,7 @@ const ProductDetail = () => {
             onPress={() => navigation.goBack()}
             accessibilityLabel="Back button"
           >
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+            <ArrowLeftIcon size={24} color={theme.colors.text} />
           </TouchableOpacity>
 
           <Text style={styles.title}>{product.product_name}</Text>
@@ -287,7 +293,7 @@ const ProductDetail = () => {
                 disabled={quantity <= 1}
                 accessibilityLabel="Decrease quantity"
               >
-                <Ionicons name="remove" size={20} color={quantity <= 1 ? theme.colors.disabled : theme.colors.text} />
+                <MinusIcon size={20} color={quantity <= 1 ? theme.colors.disabled : theme.colors.text} />
               </TouchableOpacity>
 
               <Text style={styles.quantityText}>{quantity}</Text>
@@ -297,7 +303,7 @@ const ProductDetail = () => {
                 onPress={() => handleQuantityChange(1)}
                 accessibilityLabel="Increase quantity"
               >
-                <Ionicons name="add" size={20} color={theme.colors.text} />
+                <PlusIcon size={20} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
           </View>

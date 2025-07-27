@@ -17,7 +17,8 @@ import {
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { StarIcon, HeartIcon, MapPinIcon } from "react-native-heroicons/outline"
+import { HeartIcon as HeartSolid } from "react-native-heroicons/solid"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
 
@@ -213,7 +214,7 @@ const LikedSellersScreen = () => {
         <View style={styles.sellerMetaRow}>
           {item.rating && (
             <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color="#FFD700" />
+              <StarIcon size={14} color="#FFD700" />
               <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
             </View>
           )}
@@ -238,11 +239,7 @@ const LikedSellersScreen = () => {
           onPress={() => toggleLike(item.seller_id)}
           accessibilityLabel={`Unlike ${item.name}`}
         >
-          <Ionicons
-            name="heart"
-            size={24}
-            color={theme.colors.error}
-          />
+          <HeartIcon size={24} color={theme.colors.error} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -261,7 +258,7 @@ const LikedSellersScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="heart-outline" size={50} color={theme.colors.disabled} />
+      <HeartIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>No liked vendors yet</Text>
       <Text style={styles.emptySubtext}>
         Start exploring and like your favorite vendors to see them here

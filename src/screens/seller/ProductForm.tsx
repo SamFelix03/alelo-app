@@ -16,7 +16,11 @@ import {
 } from "react-native"
 import { useNavigation, useRoute } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  ArrowLeftIcon, 
+  CameraIcon, 
+  ChevronDownIcon 
+} from "react-native-heroicons/outline"
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from "../../lib/supabase"
 import { decode } from 'base64-arraybuffer'
@@ -252,7 +256,7 @@ const ProductForm = () => {
           onPress={() => navigation.goBack()}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          <ArrowLeftIcon size={24} color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>
           {isEdit ? "Edit Product" : "Add Product"}
@@ -273,7 +277,7 @@ const ProductForm = () => {
               <Image source={{ uri: image }} style={styles.productImage} />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <Ionicons name="camera" size={40} color={theme.colors.placeholder} />
+                <CameraIcon size={40} color={theme.colors.placeholder} />
                 <Text style={styles.imagePlaceholderText}>Add Photo</Text>
               </View>
             )}
@@ -335,7 +339,7 @@ const ProductForm = () => {
                 accessibilityLabel="Select price unit"
               >
                 <Text style={styles.pickerText}>{unit}</Text>
-                <Ionicons name="chevron-down" size={20} color={theme.colors.placeholder} />
+                <ChevronDownIcon size={20} color={theme.colors.placeholder} />
               </TouchableOpacity>
             </View>
           </View>
@@ -372,7 +376,7 @@ const ProductForm = () => {
               <Text style={styles.pickerText}>
                 {CATEGORIES.find(cat => cat.value === category)?.label || category}
               </Text>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.placeholder} />
+              <ChevronDownIcon size={20} color={theme.colors.placeholder} />
             </TouchableOpacity>
           </View>
 

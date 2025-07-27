@@ -4,7 +4,17 @@ import { useState, useEffect, useCallback } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, ActivityIndicator, Modal, TextInput, Platform } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  CameraIcon, 
+  MapPinIcon, 
+  PencilIcon, 
+  DocumentTextIcon, 
+  BellIcon, 
+  PhoneIcon, 
+  BuildingOfficeIcon, 
+  ArrowRightOnRectangleIcon, 
+  XMarkIcon 
+} from "react-native-heroicons/outline"
 import { signOut } from "../../lib/auth"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
@@ -248,7 +258,7 @@ const SellerProfileScreen = () => {
               {isUploadingImage ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Ionicons name="camera" size={16} color="#FFFFFF" />
+                <CameraIcon size={16} color="#FFFFFF" />
               )}
             </TouchableOpacity>
           </View>
@@ -257,7 +267,7 @@ const SellerProfileScreen = () => {
           <Text style={styles.profilePhone}>{userInfo?.phoneNumber || ""}</Text>
           {userInfo?.profileData?.address && (
             <View style={styles.addressContainer}>
-              <Ionicons name="location-outline" size={16} color={theme.colors.placeholder} />
+              <MapPinIcon size={16} color={theme.colors.placeholder} />
               <Text style={styles.profileAddress}>{userInfo.profileData.address}</Text>
             </View>
           )}
@@ -267,7 +277,7 @@ const SellerProfileScreen = () => {
             onPress={handleEditProfile}
             accessibilityLabel="Edit profile button"
           >
-            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+            <PencilIcon size={16} color={theme.colors.primary} />
             <Text style={styles.editProfileButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
@@ -276,8 +286,7 @@ const SellerProfileScreen = () => {
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <View style={styles.statusIconContainer}>
-              <Ionicons 
-                name={isOpen ? "storefront" : "storefront-outline"} 
+              <DocumentTextIcon 
                 size={24} 
                 color={isOpen ? theme.colors.primary : theme.colors.placeholder} 
               />
@@ -309,7 +318,7 @@ const SellerProfileScreen = () => {
             >
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="notifications-outline" size={20} color={theme.colors.primary} />
+                  <BellIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Order Alerts</Text>
@@ -334,7 +343,7 @@ const SellerProfileScreen = () => {
             <View style={styles.infoItem}>
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="call-outline" size={20} color={theme.colors.primary} />
+                  <PhoneIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Phone Number</Text>
@@ -348,7 +357,7 @@ const SellerProfileScreen = () => {
             <View style={styles.infoItem}>
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="business-outline" size={20} color={theme.colors.primary} />
+                  <BuildingOfficeIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Account Type</Text>
@@ -371,7 +380,7 @@ const SellerProfileScreen = () => {
               <ActivityIndicator size="small" color="#E53935" />
             ) : (
               <>
-                <Ionicons name="log-out-outline" size={20} color="#E53935" />
+                <ArrowRightOnRectangleIcon size={20} color="#E53935" />
                 <Text style={styles.logoutText}>Logout</Text>
               </>
             )}
@@ -399,7 +408,7 @@ const SellerProfileScreen = () => {
                 onPress={() => setIsEditing(false)}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={theme.colors.text} />
+                <XMarkIcon size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -421,7 +430,7 @@ const SellerProfileScreen = () => {
                     {isUploadingImage ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Ionicons name="camera" size={20} color="#FFFFFF" />
+                      <CameraIcon size={20} color="#FFFFFF" />
                     )}
                   </View>
                 </TouchableOpacity>

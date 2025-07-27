@@ -17,7 +17,14 @@ import {
 } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  CheckCircleIcon, 
+  ClockIcon, 
+  ArrowPathIcon, 
+  XCircleIcon, 
+  ReceiptRefundIcon, 
+  ArrowLeftIcon 
+} from "react-native-heroicons/outline"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
 
@@ -360,11 +367,7 @@ const OrdersScreen = () => {
             {likingSellerOrders.includes(item.order_id) ? (
               <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Ionicons
-                name={item.is_seller_liked ? "heart" : "heart-outline"}
-                size={20}
-                color={item.is_seller_liked ? theme.colors.error : theme.colors.placeholder}
-              />
+              <CheckCircleIcon size={20} color={item.is_seller_liked ? theme.colors.error : theme.colors.placeholder} />
             )}
           </TouchableOpacity>
 
@@ -434,11 +437,7 @@ const OrdersScreen = () => {
             {likingSellerOrders.includes(item.order_id) ? (
               <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Ionicons
-                name={item.is_seller_liked ? "heart" : "heart-outline"}
-                size={20}
-                color={item.is_seller_liked ? theme.colors.error : theme.colors.placeholder}
-              />
+              <CheckCircleIcon size={20} color={item.is_seller_liked ? theme.colors.error : theme.colors.placeholder} />
             )}
           </TouchableOpacity>
 
@@ -466,7 +465,7 @@ const OrdersScreen = () => {
             onPress={() => handleReorder(item)}
             accessibilityLabel="Reorder button"
           >
-            <Ionicons name="refresh" size={16} color="#FFFFFF" />
+            <ArrowPathIcon size={16} color="#FFFFFF" />
             <Text style={styles.reorderButtonText}>Reorder</Text>
           </TouchableOpacity>
         </View>
@@ -506,11 +505,7 @@ const OrdersScreen = () => {
             {likingSellerOrders.includes(item.order_id) ? (
               <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Ionicons
-                name={item.is_seller_liked ? "heart" : "heart-outline"}
-                size={20}
-                color={item.is_seller_liked ? theme.colors.error : theme.colors.placeholder}
-              />
+              <CheckCircleIcon size={20} color={item.is_seller_liked ? theme.colors.error : theme.colors.placeholder} />
             )}
           </TouchableOpacity>
 
@@ -533,7 +528,7 @@ const OrdersScreen = () => {
         <Text style={styles.orderTotal}>Total: {formatPrice(item.total_amount)}</Text>
 
         <View style={styles.statusBadge}>
-          <Ionicons name="close-circle" size={16} color={theme.colors.error} />
+          <XCircleIcon size={16} color={theme.colors.error} />
           <Text style={[styles.statusText, { color: theme.colors.error }]}>Cancelled</Text>
         </View>
       </View>
@@ -542,7 +537,7 @@ const OrdersScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="receipt" size={50} color={theme.colors.disabled} />
+      <ReceiptRefundIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>No orders yet</Text>
       <Text style={styles.emptySubtext}>
         {activeTab === 'pending' ? 'Your pending orders will appear here' :
@@ -588,7 +583,7 @@ const OrdersScreen = () => {
               onPress={() => navigation.goBack()}
               accessibilityLabel="Back button"
             >
-              <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+              <ArrowLeftIcon size={24} color={theme.colors.text} />
             </TouchableOpacity>
             <Text style={styles.title}>My Orders</Text>
           </View>
@@ -610,7 +605,7 @@ const OrdersScreen = () => {
             onPress={() => navigation.goBack()}
             accessibilityLabel="Back button"
           >
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+            <ArrowLeftIcon size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>My Orders</Text>
         </View>

@@ -1,6 +1,19 @@
 "use client"
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"
+import { 
+  HomeIcon, 
+  TruckIcon, 
+  UserGroupIcon, 
+  ShieldCheckIcon, 
+  Bars3Icon,
+  UserIcon
+} from "react-native-heroicons/outline"
+import { 
+  HomeIcon as HomeSolid, 
+  TruckIcon as TruckSolid, 
+  ShieldCheckIcon as ShieldCheckSolid, 
+  Bars3Icon as Bars3Solid
+} from "react-native-heroicons/solid"
 import { View, Text, StyleSheet, Platform } from "react-native"
 import { theme } from "../theme"
 
@@ -22,13 +35,13 @@ const SellerTabs = () => {
     <View style={[styles.customersIconContainer, focused && styles.customersIconContainerFocused]}>
       <View style={styles.customersIconGroup}>
         <View style={[styles.customerIconPerson, styles.customerLeft]}>
-          <Ionicons name="person" size={12} color="#000" />
+          <UserIcon size={12} color="#000" />
         </View>
         <View style={[styles.customerIconPerson, styles.customerCenter, styles.customerFront]}>
-          <Ionicons name="person" size={12} color="#000" />
+          <UserIcon size={12} color="#000" />
         </View>
         <View style={[styles.customerIconPerson, styles.customerRight]}>
-          <Ionicons name="person" size={12} color="#000" />
+          <UserIcon size={12} color="#000" />
         </View>
       </View>
     </View>
@@ -42,25 +55,19 @@ const SellerTabs = () => {
 
           switch (route.name) {
             case "Home":
-              icon = <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />;
+              icon = focused ? <HomeSolid size={24} color={color} /> : <HomeIcon size={24} color={color} />;
               break;
             case "Products":
-              icon = (
-                <MaterialCommunityIcons
-                  name={focused ? "truck-delivery" : "truck-delivery-outline"}
-                  size={24}
-                  color={color}
-                />
-              );
+              icon = focused ? <TruckSolid size={24} color={color} /> : <TruckIcon size={24} color={color} />;
               break;
             case "Customers":
               icon = <CustomersIcon focused={focused} />;
               break;
             case "Orders":
-              icon = <Ionicons name={focused ? "shield" : "shield-outline"} size={24} color={color} />;
+              icon = focused ? <ShieldCheckSolid size={24} color={color} /> : <ShieldCheckIcon size={24} color={color} />;
               break;
             case "Menu":
-              icon = <Ionicons name={focused ? "menu" : "menu-outline"} size={24} color={color} />;
+              icon = focused ? <Bars3Solid size={24} color={color} /> : <Bars3Icon size={24} color={color} />;
               break;
           }
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { View, StyleSheet, Text, TouchableOpacity, Switch, Image, ScrollView, SafeAreaView, Platform, Alert, AlertButton } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { BuildingOfficeIcon, UserIcon, ClockIcon } from "react-native-heroicons/outline"
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"
 import { useLocation } from "../../hooks/useLocation"
 import { useAuth } from "../../context/AuthContext"
@@ -384,7 +384,7 @@ const DashboardScreen = () => {
               }}
             >
               <View style={[styles.sellerMarker, isOpen && styles.sellerMarkerOpen]}>
-                <Ionicons name="business" size={20} color="#FFFFFF" />
+                <BuildingOfficeIcon size={20} color="#FFFFFF" />
               </View>
             </Marker>
           )}
@@ -400,7 +400,7 @@ const DashboardScreen = () => {
               onPress={() => handleBuyerMarkerPress(buyer)}
             >
               <View style={styles.buyerMarker}>
-                <Ionicons name="person" size={16} color="#FFFFFF" />
+                <UserIcon size={16} color="#FFFFFF" />
               </View>
             </Marker>
           ))}
@@ -448,8 +448,7 @@ const DashboardScreen = () => {
           {isOpen && (
             <View style={styles.locationSharingContainer}>
               <View style={styles.locationIconContainer}>
-                <Ionicons 
-                  name={isManualLocation ? "location" : "globe"} 
+                <BuildingOfficeIcon 
                   size={24} 
                   color={theme.colors.primary} 
                 />

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { View, StyleSheet, Image, Text, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from "react-native"
+import { View, StyleSheet, Image, Text, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
@@ -71,41 +71,46 @@ const RoleSelection = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.logoContainer}>
-      <Image source={{ uri: "https://yrpfcforiwwwrvcanyhb.supabase.co/storage/v1/object/public/seller_logos/logo.png" }} style={styles.logo} accessibilityLabel="App logo" />
-      <Text style={styles.title}>Alelo</Text>
-        <Text style={styles.subtitle}>Shop Peacefully at Your Doorstep</Text>
-      </View>
-
-      <View style={styles.phoneContainer}>
-        <Text style={styles.question}>Enter your phone number to continue</Text>
-
-        <View style={styles.phoneInputContainer}>
-          <View style={styles.countryCodeContainer}>
-            <Text style={styles.countryCode}>{countryCode}</Text>
-          </View>
-          <TextInput
-            style={styles.phoneInput}
-            placeholder="Phone Number"
-            keyboardType="phone-pad"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            maxLength={10}
-            accessibilityLabel="Phone number input"
-          />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"} 
+        style={styles.keyboardAvoidView}
+      >
+        <View style={styles.logoContainer}>
+        <Image source={{ uri: "https://yrpfcforiwwwrvcanyhb.supabase.co/storage/v1/object/public/seller_logos/logo.png" }} style={styles.logo} accessibilityLabel="App logo" />
+        <Text style={styles.title}>Alelo</Text>
+          <Text style={styles.subtitle}>Shop Peacefully at Your Doorstep</Text>
         </View>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <View style={styles.phoneContainer}>
+          <Text style={styles.question}>Enter your phone number to continue</Text>
 
-        <TouchableOpacity
-          style={[styles.continueButton, loading && styles.buttonDisabled]}
-          onPress={handleContinue}
-          disabled={loading}
-          accessibilityLabel="Continue button"
-        >
-          {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Continue</Text>}
-        </TouchableOpacity>
-      </View>
+          <View style={styles.phoneInputContainer}>
+            <View style={styles.countryCodeContainer}>
+              <Text style={styles.countryCode}>{countryCode}</Text>
+            </View>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="Phone Number"
+              keyboardType="phone-pad"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              maxLength={10}
+              accessibilityLabel="Phone number input"
+            />
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.continueButton, loading && styles.buttonDisabled]}
+            onPress={handleContinue}
+            disabled={loading}
+            accessibilityLabel="Continue button"
+          >
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Continue</Text>}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
@@ -115,6 +120,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
     padding: spacing.lg,
+  },
+  keyboardAvoidView: {
+    flex: 1,
   },
   logoContainer: {
     alignItems: "center",

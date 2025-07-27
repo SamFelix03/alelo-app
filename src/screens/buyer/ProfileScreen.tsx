@@ -4,7 +4,19 @@ import { useState, useEffect } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, ActivityIndicator, Modal, TextInput, Platform } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  CameraIcon, 
+  MapPinIcon, 
+  PencilIcon, 
+  DocumentTextIcon, 
+  ChevronRightIcon,
+  BellIcon,
+  BuildingStorefrontIcon,
+  PhoneIcon,
+  UserIcon,
+  ArrowRightOnRectangleIcon,
+  XMarkIcon
+} from "react-native-heroicons/outline"
 import { signOut } from "../../lib/auth"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
@@ -221,7 +233,7 @@ const ProfileScreen = () => {
               {isUploadingImage ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Ionicons name="camera" size={16} color="#FFFFFF" />
+                <CameraIcon size={16} color="#FFFFFF" />
               )}
             </TouchableOpacity>
           </View>
@@ -230,7 +242,7 @@ const ProfileScreen = () => {
           <Text style={styles.profilePhone}>{userInfo?.phoneNumber || ""}</Text>
           {userInfo?.profileData?.address && (
             <View style={styles.addressContainer}>
-              <Ionicons name="location-outline" size={16} color={theme.colors.placeholder} />
+              <MapPinIcon size={16} color={theme.colors.placeholder} />
               <Text style={styles.profileAddress}>{userInfo.profileData.address}</Text>
             </View>
           )}
@@ -240,7 +252,7 @@ const ProfileScreen = () => {
             onPress={handleEditProfile}
             accessibilityLabel="Edit profile button"
           >
-            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+            <PencilIcon size={16} color={theme.colors.primary} />
             <Text style={styles.editProfileButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
@@ -256,14 +268,14 @@ const ProfileScreen = () => {
             >
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="receipt-outline" size={20} color={theme.colors.primary} />
+                  <DocumentTextIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>My Orders</Text>
                   <Text style={styles.settingSubtitle}>View your order history</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={theme.colors.placeholder} />
+              <ChevronRightIcon size={20} color={theme.colors.placeholder} />
             </TouchableOpacity>
           </View>
         </View>
@@ -279,7 +291,7 @@ const ProfileScreen = () => {
             >
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="notifications-outline" size={20} color={theme.colors.primary} />
+                  <BellIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Order Updates</Text>
@@ -304,7 +316,7 @@ const ProfileScreen = () => {
             >
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="storefront-outline" size={20} color={theme.colors.primary} />
+                  <BuildingStorefrontIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Seller Alerts</Text>
@@ -329,7 +341,7 @@ const ProfileScreen = () => {
             <View style={styles.infoItem}>
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="call-outline" size={20} color={theme.colors.primary} />
+                  <PhoneIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Phone Number</Text>
@@ -343,7 +355,7 @@ const ProfileScreen = () => {
             <View style={styles.infoItem}>
               <View style={styles.settingLeft}>
                 <View style={styles.settingIconContainer}>
-                  <Ionicons name="person-outline" size={20} color={theme.colors.primary} />
+                  <UserIcon size={20} color={theme.colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Account Type</Text>
@@ -366,7 +378,7 @@ const ProfileScreen = () => {
               <ActivityIndicator size="small" color="#E53935" />
             ) : (
               <>
-                <Ionicons name="log-out-outline" size={20} color="#E53935" />
+                <ArrowRightOnRectangleIcon size={20} color="#E53935" />
                 <Text style={styles.logoutText}>Logout</Text>
               </>
             )}
@@ -394,7 +406,7 @@ const ProfileScreen = () => {
                 onPress={() => setIsEditing(false)}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={theme.colors.text} />
+                <XMarkIcon size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -416,7 +428,7 @@ const ProfileScreen = () => {
                     {isUploadingImage ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Ionicons name="camera" size={20} color="#FFFFFF" />
+                      <CameraIcon size={20} color="#FFFFFF" />
                     )}
                   </View>
                 </TouchableOpacity>

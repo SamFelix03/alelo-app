@@ -10,10 +10,12 @@ import SellerProfile from '../screens/buyer/SellerProfile';
 import ProductDetail from '../screens/buyer/ProductDetail';
 import CartScreen from '../screens/buyer/CartScreen';
 import ProductForm from '../screens/seller/ProductForm';
-import SearchScreen from '../screens/buyer/SearchScreen';
 
 // Auth Context Provider
 import { AuthProvider } from '../context/AuthContext';
+
+// Location Error Boundary
+import LocationErrorBoundary from '../components/LocationErrorBoundary';
 
 // Define stack navigator param list
 type RootStackParamList = {
@@ -30,29 +32,30 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const AppNavigator = () => {
   return (
     <AuthProvider>
-    <NavigationContainer>
-        <Stack.Navigator 
-          initialRouteName="Auth"
-          screenOptions={{ 
-            headerShown: false,
-            animation: 'slide_from_right',
-          }}
-        >
-          {/* Auth Navigator handles authentication flow */}
-          <Stack.Screen 
-            name="Auth" 
-            component={AuthNavigator} 
-            options={{ headerShown: false }}
-          />
+      <LocationErrorBoundary>
+        <NavigationContainer>
+          <Stack.Navigator 
+            initialRouteName="Auth"
+            screenOptions={{ 
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          >
+            {/* Auth Navigator handles authentication flow */}
+            <Stack.Screen 
+              name="Auth" 
+              component={AuthNavigator} 
+              options={{ headerShown: false }}
+            />
 
-          {/* Common screens accessible from both buyer and seller flows */}
-        <Stack.Screen name="SellerProfile" component={SellerProfile} />
-        <Stack.Screen name="ProductDetail" component={ProductDetail} />
-        <Stack.Screen name="CartScreen" component={CartScreen} />
-          <Stack.Screen name="ProductForm" component={ProductForm} />
-        <Stack.Screen name="SearchScreen" component={SearchScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+            {/* Common screens accessible from both buyer and seller flows */}
+            <Stack.Screen name="SellerProfile" component={SellerProfile} />
+            <Stack.Screen name="ProductDetail" component={ProductDetail} />
+            <Stack.Screen name="CartScreen" component={CartScreen} />
+            <Stack.Screen name="ProductForm" component={ProductForm} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </LocationErrorBoundary>
     </AuthProvider>
   );
 };

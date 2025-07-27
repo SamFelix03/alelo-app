@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "Alelo",
-    "slug": "alelo",
-    "version": "0.0.1",
+    "name": "Alelo App",
+    "slug": "alelo-app",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -15,9 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.alelo.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to show nearby vendors and enable location-based features.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to show nearby vendors and enable location-based features."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to find nearby vendors and provide location-based services.",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to find nearby vendors and provide location-based services.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to find nearby vendors and provide location-based services."
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyDNM509fti4agoQzOYubVVQknUxlzvfJOM"
       }
     },
     "android": {
@@ -25,24 +31,37 @@
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.alelo.app",
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ]
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDNM509fti4agoQzOYubVVQknUxlzvfJOM"
+        }
+      }
     },
     "web": {
+      "favicon": "./assets/logo.png"
     },
     "plugins": [
+      "expo-location",
       [
-        "expo-location",
+        "expo-image-picker",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow StreetVend to use your location to show nearby vendors and enable location-based features.",
-          "locationAlwaysPermission": "Allow StreetVend to use your location to show nearby vendors and enable location-based features.",
-          "locationWhenInUsePermission": "Allow StreetVend to use your location to show nearby vendors and enable location-based features.",
-          "isIosBackgroundLocationEnabled": true,
-          "isAndroidBackgroundLocationEnabled": true
+          "photosPermission": "The app accesses your photos to upload business logos and product images."
         }
-      ]
-    ]
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f774f109-eca2-4caf-b7f8-5e00e19c1a32"
+      }
+    }
   }
-} 
+}

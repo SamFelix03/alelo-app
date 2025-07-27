@@ -4,7 +4,12 @@ import React, { useState, useEffect } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, SafeAreaView, FlatList, Platform, Alert, RefreshControl, Linking } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  UserIcon, 
+  MapIcon, 
+  UsersIcon, 
+  MapPinIcon 
+} from "react-native-heroicons/outline"
 import { useLocation } from "../../hooks/useLocation"
 import { useAuth } from "../../context/AuthContext"
 import { getNearbyCustomersWithNeeds, getAllNearbyCustomers, getBuyerLastLocation } from "../../lib/locationService"
@@ -137,7 +142,7 @@ const CustomersScreen = () => {
       <View style={styles.customerHeader}>
         <View style={styles.customerInfo}>
           <View style={styles.customerIcon}>
-            <Ionicons name="person" size={24} color={theme.colors.primary} />
+            <UserIcon size={24} color={theme.colors.primary} />
           </View>
           <View style={styles.customerDetails}>
             <Text style={styles.customerName}>{item.buyer_name}</Text>
@@ -152,7 +157,7 @@ const CustomersScreen = () => {
               navigateToCustomer(item)
             }}
           >
-            <Ionicons name="navigate" size={20} color={theme.colors.primary} />
+            <MapIcon size={20} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -167,7 +172,7 @@ const CustomersScreen = () => {
             navigateToCustomer(item)
           }}
         >
-          <Ionicons name="navigate" size={16} color="#FFFFFF" />
+          <MapIcon size={16} color="#FFFFFF" />
           <Text style={styles.actionButtonText}>Navigate</Text>
         </TouchableOpacity>
       </View>
@@ -176,7 +181,7 @@ const CustomersScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="people" size={50} color={theme.colors.disabled} />
+      <UsersIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>
         {showAllCustomers ? 'No customers nearby' : 'No customers need your items'}
       </Text>
@@ -293,7 +298,7 @@ const CustomersScreen = () => {
       <SafeAreaView style={styles.container}>
         {renderHeader()}
         <View style={styles.emptyContainer}>
-          <Ionicons name="location" size={50} color={theme.colors.disabled} />
+          <MapPinIcon size={50} color={theme.colors.disabled} />
           <Text style={styles.emptyText}>Location Required</Text>
           <Text style={styles.emptySubtext}>
             Please enable location services to find nearby customers

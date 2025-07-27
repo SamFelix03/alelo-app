@@ -17,7 +17,13 @@ import {
 } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  UsersIcon, 
+  ShoppingBagIcon, 
+  MapPinIcon, 
+  MagnifyingGlassIcon, 
+  XCircleIcon 
+} from "react-native-heroicons/outline"
 import { useAuth } from "../../context/AuthContext"
 import { useLocation } from "../../hooks/useLocation"
 import { supabase } from "../../lib/supabase"
@@ -219,7 +225,7 @@ const ShopScreen = () => {
           {formatPriceRange(item.min_price, item.max_price, item.price_unit)}
         </Text>
         <View style={styles.sellerCount}>
-          <Ionicons name="people" size={14} color={theme.colors.placeholder} />
+          <UsersIcon size={14} color={theme.colors.placeholder} />
           <Text style={styles.sellerCountText}>
             {item.seller_count} seller{item.seller_count !== 1 ? 's' : ''}
           </Text>
@@ -235,7 +241,7 @@ const ShopScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="basket-outline" size={50} color={theme.colors.disabled} />
+      <ShoppingBagIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>
         {searchQuery ? "No products found" : "No products available"}
       </Text>
@@ -260,7 +266,7 @@ const ShopScreen = () => {
           <Text style={styles.title}>Shop</Text>
         </View>
         <View style={styles.noLocationContainer}>
-          <Ionicons name="location-outline" size={50} color={theme.colors.disabled} />
+          <MapPinIcon size={50} color={theme.colors.disabled} />
           <Text style={styles.noLocationText}>Location Required</Text>
           <Text style={styles.noLocationSubtext}>
             We need your location to show products from nearby vendors
@@ -282,7 +288,7 @@ const ShopScreen = () => {
         </Text>
 
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
+          <MagnifyingGlassIcon size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search for products"
@@ -292,7 +298,7 @@ const ShopScreen = () => {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => handleSearch("")} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={20} color={theme.colors.placeholder} />
+              <XCircleIcon size={20} color={theme.colors.placeholder} />
             </TouchableOpacity>
           )}
         </View>

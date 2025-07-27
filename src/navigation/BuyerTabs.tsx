@@ -1,6 +1,16 @@
 import React from "react"
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
-import { Ionicons, MaterialCommunityIcons, FontAwesome } from "@expo/vector-icons"
+import { 
+  TruckIcon, 
+  HeartIcon, 
+  BuildingStorefrontIcon, 
+  ShoppingCartIcon, 
+  UserIcon 
+} from "react-native-heroicons/outline"
+import { 
+  HeartIcon as HeartSolid, 
+  UserIcon as UserSolid 
+} from "react-native-heroicons/solid"
 import { View, Text, StyleSheet } from "react-native"
 import { theme } from "../theme"
 
@@ -11,7 +21,7 @@ import ShopScreen from "../screens/buyer/ShopScreen"
 import OrdersScreen from "../screens/buyer/OrdersScreen"
 import CartScreen from "../screens/buyer/CartScreen"
 import ProfileScreen from "../screens/buyer/ProfileScreen"
-import NotificationsScreen from "../screens/buyer/NotificationsScreen"
+
 
 const Tab = createBottomTabNavigator()
 
@@ -23,17 +33,17 @@ const BuyerTabs = () => {
           let icon = null;
 
           if (route.name === "Home") {
-            icon = <FontAwesome name="truck" size={22} color={color} />
+            icon = <TruckIcon size={22} color={color} />
           } else if (route.name === "Liked Sellers") {
-            icon = <Ionicons name={focused ? "heart" : "heart-outline"} size={22} color={color} />
+            icon = focused ? <HeartSolid size={22} color={color} /> : <HeartIcon size={22} color={color} />
           } else if (route.name === "Shop") {
             icon = <View style={styles.shopIconContainer}>
-              <MaterialCommunityIcons name="storefront" size={40} color="#FFFFFF" />
+              <BuildingStorefrontIcon size={40} color="#FFFFFF" />
             </View>
           } else if (route.name === "Cart") {
-            icon = <Ionicons name="cart" size={22} color={color} />
+            icon = <ShoppingCartIcon size={22} color={color} />
           } else if (route.name === "Profile") {
-            icon = <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
+            icon = focused ? <UserSolid size={22} color={color} /> : <UserIcon size={22} color={color} />
           }
 
           return (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import { 
   LocationCoords, 
   LocationError, 
@@ -38,10 +39,15 @@ export const useLocation = (): UseLocationReturn => {
   const [hasPermission, setHasPermission] = useState(false);
   const [isManualLocation, setIsManualLocation] = useState(false);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const isCheckingPermissions = useRef(false);
 
   // Check permissions and get initial location on mount
   useEffect(() => {
-    checkPermissions();
+    const initializeLocation = async () => {
+      await checkPermissions();
+    };
+    
+    initializeLocation();
     
     // Cleanup on unmount
     return () => {
@@ -50,6 +56,12 @@ export const useLocation = (): UseLocationReturn => {
   }, []);
 
   const checkPermissions = async (): Promise<void> => {
+    if (isCheckingPermissions.current) {
+      return; // Prevent concurrent permission checks
+    }
+    
+    isCheckingPermissions.current = true;
+    
     try {
       const servicesEnabled = await isLocationServicesEnabled();
       if (!servicesEnabled) {
@@ -73,8 +85,11 @@ export const useLocation = (): UseLocationReturn => {
         setError(null);
       }
     } catch (err) {
+      console.error('Error checking permissions:', err);
       setError({ code: 'PERMISSION_ERROR', message: 'Failed to check location permissions' });
       setHasPermission(false);
+    } finally {
+      isCheckingPermissions.current = false;
     }
   };
 
@@ -100,37 +115,41 @@ export const useLocation = (): UseLocationReturn => {
       }
     } catch (error) {
       console.error('Error loading saved location:', error);
+      setError({ code: 'LOAD_ERROR', message: 'Failed to load saved location' });
     }
   };
 
   const refreshLocation = async (): Promise<void> => {
     if (!hasPermission) {
       await checkPermissions();
-      return;
+      if (!hasPermission) {
+        return;
+      }
     }
 
     setIsLoading(true);
     setError(null);
     
     try {
-      // Single quick attempt with 5 second timeout
+      console.log('Refreshing location...');
       const location = await getCurrentLocation(1);
+      
       if (location) {
         setCurrentLocation(location);
         setIsManualLocation(false); // Reset manual flag when we get GPS location
-        console.log('Got location quickly:', location);
+        console.log('Location refreshed successfully:', location);
       } else {
-        console.log('Quick location attempt failed, will offer manual selection');
+        console.log('Location refresh failed, no location returned');
         setError({ 
           code: 'LOCATION_UNAVAILABLE', 
-          message: 'Unable to get current location quickly. You can set your location manually instead.' 
+          message: 'Unable to get current location. You can set your location manually instead.' 
         });
       }
     } catch (err) {
       console.error('Error in refreshLocation:', err);
       setError({ 
         code: 'LOCATION_ERROR', 
-        message: 'Failed to get location quickly. You can set your location manually instead.' 
+        message: 'Failed to get location. You can set your location manually instead.' 
       });
     } finally {
       setIsLoading(false);
@@ -162,19 +181,23 @@ export const useLocation = (): UseLocationReturn => {
     setError(null);
 
     try {
+      console.log('Starting location tracking...');
       const subscription = await startLocationTracking(
         (location: LocationCoords) => {
           setCurrentLocation(location);
           setIsManualLocation(false);
           setError(null); // Clear any previous errors
+          console.log('Location updated from tracking:', location);
         },
         (error: LocationError) => {
+          console.error('Location tracking error:', error);
           setError(error);
         }
       );
 
       if (subscription) {
         locationSubscription.current = subscription;
+        console.log('Location tracking started successfully');
       } else {
         setError({ code: 'TRACKING_FAILED', message: 'Failed to start location tracking' });
       }
@@ -188,8 +211,13 @@ export const useLocation = (): UseLocationReturn => {
 
   const stopTracking = (): void => {
     if (locationSubscription.current) {
-      locationSubscription.current.remove();
-      locationSubscription.current = null;
+      try {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+        console.log('Location tracking stopped');
+      } catch (error) {
+        console.error('Error stopping location tracking:', error);
+      }
     }
   };
 
@@ -221,6 +249,7 @@ export const useLocation = (): UseLocationReturn => {
       
       return success;
     } catch (err) {
+      console.error('Error updating location:', err);
       setError({ code: 'UPDATE_ERROR', message: 'Error updating location' });
       return false;
     }
@@ -236,6 +265,7 @@ export const useLocation = (): UseLocationReturn => {
       const sellers = await getNearbySellersByLocation(currentLocation, radiusKm);
       return sellers;
     } catch (err) {
+      console.error('Error fetching nearby sellers:', err);
       setError({ code: 'FETCH_ERROR', message: 'Error fetching nearby sellers' });
       return [];
     }

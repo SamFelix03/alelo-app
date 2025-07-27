@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 export interface LocationCoords {
@@ -11,10 +12,20 @@ export interface LocationError {
   message: string;
 }
 
-// Check if location services are enabled
+// Production-safe timeout wrapper
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs);
+    })
+  ]);
+};
+
+// Check if location services are enabled with proper error handling
 export const isLocationServicesEnabled = async (): Promise<boolean> => {
   try {
-    const enabled = await Location.hasServicesEnabledAsync();
+    const enabled = await withTimeout(Location.hasServicesEnabledAsync(), 5000);
     return enabled;
   } catch (error) {
     console.error('Error checking location services:', error);
@@ -22,7 +33,7 @@ export const isLocationServicesEnabled = async (): Promise<boolean> => {
   }
 };
 
-// Request location permissions with better error handling
+// Production-safe permission request with comprehensive error handling
 export const requestLocationPermission = async (): Promise<{ granted: boolean; error?: string }> => {
   try {
     // First check if location services are enabled
@@ -34,17 +45,36 @@ export const requestLocationPermission = async (): Promise<{ granted: boolean; e
       };
     }
 
-    // Check current permission status
-    const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+    // Check current permission status with timeout
+    let existingStatus;
+    try {
+      const result = await withTimeout(Location.getForegroundPermissionsAsync(), 10000);
+      existingStatus = result.status;
+    } catch (error) {
+      console.error('Error checking existing permissions:', error);
+      return {
+        granted: false,
+        error: 'Failed to check location permissions. Please try again.'
+      };
+    }
     
     if (existingStatus === 'granted') {
       return { granted: true };
     }
 
-    // Request permission if not already granted
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    // Request permission if not already granted with timeout
+    let permissionResult;
+    try {
+      permissionResult = await withTimeout(Location.requestForegroundPermissionsAsync(), 30000);
+    } catch (error) {
+      console.error('Error requesting permissions:', error);
+      return {
+        granted: false,
+        error: 'Permission request timed out. Please try again or enable location manually in settings.'
+      };
+    }
     
-    if (status !== 'granted') {
+    if (permissionResult.status !== 'granted') {
       return { 
         granted: false, 
         error: 'Location permission was denied. Please enable location access in your device settings to use this feature.' 
@@ -61,9 +91,9 @@ export const requestLocationPermission = async (): Promise<{ granted: boolean; e
   }
 };
 
-// Get current location with improved error handling and retry limits
+// Production-safe location fetching with multiple fallback strategies
 export const getCurrentLocation = async (maxRetries: number = 1): Promise<LocationCoords | null> => {
-  console.log(`Getting location - single attempt with short timeout`);
+  console.log('Getting current location with production-safe implementation');
   
   try {
     const permissionResult = await requestLocationPermission();
@@ -72,30 +102,79 @@ export const getCurrentLocation = async (maxRetries: number = 1): Promise<Locati
       return null;
     }
 
+    // Strategy 1: Try to get last known position first (fastest)
     try {
-      // Try to get location with a very short timeout
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced, // Use balanced for faster response
-        timeInterval: 5000, // Very short 5 second timeout
-        distanceInterval: 1,
-      });
+      console.log('Attempting to get last known position...');
+      const lastKnown = await withTimeout(
+        Location.getLastKnownPositionAsync({
+          maxAge: 300000, // 5 minutes
+          requiredAccuracy: 1000 // 1km accuracy is acceptable for fallback
+        }),
+        5000
+      );
+      
+      if (lastKnown) {
+        console.log('Successfully got last known location');
+        return {
+          latitude: lastKnown.coords.latitude,
+          longitude: lastKnown.coords.longitude,
+        };
+      }
+    } catch (error) {
+      console.log('Last known position failed:', error);
+    }
 
-      console.log(`Successfully got location quickly`);
+    // Strategy 2: Try current position with very short timeout and low accuracy
+    try {
+      console.log('Attempting to get current position with low accuracy...');
+      const location = await withTimeout(
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low, // Use low accuracy for faster response
+          timeInterval: Platform.OS === 'ios' ? 5000 : 10000, // Different timeouts for platforms
+          distanceInterval: 1,
+        }),
+        Platform.OS === 'ios' ? 15000 : 20000 // iOS tends to be faster
+      );
+
+      console.log('Successfully got current location with low accuracy');
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
-    } catch (locationError) {
-      console.log(`Location failed quickly:`, locationError);
-      return null;
+    } catch (error) {
+      console.log('Current position with low accuracy failed:', error);
     }
+
+    // Strategy 3: Try with balanced accuracy and longer timeout
+    try {
+      console.log('Attempting to get current position with balanced accuracy...');
+      const location = await withTimeout(
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: Platform.OS === 'ios' ? 10000 : 15000,
+          distanceInterval: 1,
+        }),
+        Platform.OS === 'ios' ? 25000 : 30000
+      );
+
+      console.log('Successfully got current location with balanced accuracy');
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    } catch (error) {
+      console.log('Current position with balanced accuracy failed:', error);
+    }
+
+    console.log('All location strategies failed');
+    return null;
   } catch (error) {
     console.error('Error getting current location:', error);
     return null;
   }
 };
 
-// Start watching location for sellers with improved error handling
+// Production-safe location tracking with proper error handling
 export const startLocationTracking = async (
   onLocationUpdate: (location: LocationCoords) => void,
   onError?: (error: LocationError) => void
@@ -110,18 +189,26 @@ export const startLocationTracking = async (
       return null;
     }
 
-    const subscription = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.Balanced, // Use balanced for better battery life
-        timeInterval: 30000, // Update every 30 seconds
-        distanceInterval: 50, // Update when moved 50 meters
-      },
-      (location: Location.LocationObject) => {
-        onLocationUpdate({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-      }
+    const subscription = await withTimeout(
+      Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 30000, // Update every 30 seconds
+          distanceInterval: 50, // Update when moved 50 meters
+        },
+        (location: Location.LocationObject) => {
+          try {
+            onLocationUpdate({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          } catch (error) {
+            console.error('Error in location update callback:', error);
+            onError?.({ code: 'CALLBACK_ERROR', message: 'Error processing location update' });
+          }
+        }
+      ),
+      15000
     );
 
     return subscription;
@@ -295,7 +382,6 @@ export const getNearbyCustomersWithNeeds = async (
       return [];
     }
 
-    // Get product names that the seller has
     const sellerProductNames = sellerProducts.map(p => p.name);
     console.log('Seller has products:', sellerProductNames);
 

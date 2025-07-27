@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { Ionicons } from '@expo/vector-icons';
+import { XMarkIcon, BuildingOfficeIcon } from "react-native-heroicons/outline"
 import { theme, spacing, fontSize } from '../theme';
 import { LocationCoords } from '../lib/locationService';
 
@@ -64,7 +64,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
+            <XMarkIcon size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Select Your Location</Text>
           <TouchableOpacity
@@ -109,7 +109,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
                 description="This is where customers will see you on the map"
               >
                 <View style={styles.customMarker}>
-                  <Ionicons name="business" size={24} color="#FFFFFF" />
+                  <BuildingOfficeIcon size={24} color="#FFFFFF" />
                 </View>
               </Marker>
             )}

@@ -4,7 +4,16 @@ import React, { useState, useEffect } from "react"
 import { View, StyleSheet, Text, Image, TouchableOpacity, FlatList, SafeAreaView, Alert, ActivityIndicator, Platform } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  CheckIcon, 
+  XMarkIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  Squares2X2Icon, 
+  ListBulletIcon, 
+  ShoppingBagIcon, 
+  PlusIcon 
+} from "react-native-heroicons/outline"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
@@ -276,7 +285,7 @@ const ProductsScreen = () => {
             onPress={() => toggleStockStatus(item.product_id)}
             accessibilityLabel={`Toggle ${item.name} stock status`}
           >
-            <Ionicons name={item.is_available ? "checkmark" : "close"} size={16} color="#FFFFFF" />
+            {item.is_available ? <CheckIcon size={16} color="#FFFFFF" /> : <XMarkIcon size={16} color="#FFFFFF" />}
           </TouchableOpacity>
         </View>
 
@@ -294,7 +303,7 @@ const ProductsScreen = () => {
               onPress={() => handleEditProduct(item)}
               accessibilityLabel={`Edit ${item.name}`}
             >
-              <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+              <PencilIcon size={16} color={theme.colors.primary} />
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>
 
@@ -303,7 +312,7 @@ const ProductsScreen = () => {
               onPress={() => handleDeleteProduct(item)}
               accessibilityLabel={`Delete ${item.name}`}
             >
-              <Ionicons name="trash" size={16} color={theme.colors.error} />
+              <TrashIcon size={16} color={theme.colors.error} />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -346,7 +355,7 @@ const ProductsScreen = () => {
             onPress={() => handleEditProduct(item)}
             accessibilityLabel={`Edit ${item.name}`}
           >
-            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+            <PencilIcon size={16} color={theme.colors.primary} />
             <Text style={styles.editButtonText}>Edit</Text>
           </TouchableOpacity>
 
@@ -355,7 +364,7 @@ const ProductsScreen = () => {
             onPress={() => handleDeleteProduct(item)}
             accessibilityLabel={`Delete ${item.name}`}
           >
-            <Ionicons name="trash" size={16} color={theme.colors.error} />
+            <TrashIcon size={16} color={theme.colors.error} />
             <Text style={styles.deleteButtonText}>Delete</Text>
           </TouchableOpacity>
         </View>
@@ -366,7 +375,7 @@ const ProductsScreen = () => {
         onPress={() => toggleStockStatus(item.product_id)}
         accessibilityLabel={`Toggle ${item.name} stock status`}
       >
-        <Ionicons name={item.is_available ? "checkmark" : "close"} size={16} color="#FFFFFF" />
+        {item.is_available ? <CheckIcon size={16} color="#FFFFFF" /> : <XMarkIcon size={16} color="#FFFFFF" />}
       </TouchableOpacity>
     </TouchableOpacity>
   )
@@ -387,7 +396,7 @@ const ProductsScreen = () => {
               onPress={toggleViewMode}
               accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
             >
-              <Ionicons name={viewMode === "grid" ? "list" : "grid"} size={24} color={theme.colors.text} />
+              <Squares2X2Icon size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
 
@@ -419,7 +428,7 @@ const ProductsScreen = () => {
 
           {products.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="basket-outline" size={64} color={theme.colors.placeholder} />
+              <ShoppingBagIcon size={64} color={theme.colors.placeholder} />
               <Text style={styles.emptyTitle}>No Products Yet</Text>
               <Text style={styles.emptyDescription}>
                 Add your first product to start selling to customers
@@ -463,7 +472,7 @@ const ProductsScreen = () => {
             onPress={handleAddProduct}
             accessibilityLabel="Add new product"
           >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
+            <PlusIcon size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </>
       )}

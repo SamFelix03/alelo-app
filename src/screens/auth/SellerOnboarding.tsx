@@ -17,7 +17,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { ArrowLeftIcon, MapPinIcon, PhotoIcon } from "react-native-heroicons/outline"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
 import * as ImagePicker from 'expo-image-picker'
@@ -220,7 +220,7 @@ const SellerOnboarding = () => {
           onPress={() => navigation.goBack()} 
           accessibilityLabel="Back button"
         >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          <ArrowLeftIcon size={24} color={theme.colors.text} />
         </TouchableOpacity>
 
         <Text style={styles.title}>Set Up Your Business</Text>
@@ -254,7 +254,7 @@ const SellerOnboarding = () => {
           onPress={handleLocationPicker}
           accessibilityLabel="Set location button"
         >
-          <Ionicons name="location" size={20} color={theme.colors.primary} />
+          <MapPinIcon size={20} color={theme.colors.primary} />
           <Text style={styles.locationButtonText}>
             {location ? "Location Selected (Tap to change)" : "Set Your Business Location"}
           </Text>
@@ -276,7 +276,7 @@ const SellerOnboarding = () => {
             />
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Ionicons name="image" size={40} color={theme.colors.placeholder} />
+              <PhotoIcon size={40} color={theme.colors.placeholder} />
               <Text style={styles.imagePlaceholderText}>Tap to upload logo</Text>
             </View>
           )}

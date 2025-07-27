@@ -17,7 +17,18 @@ import {
 } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  MapPinIcon, 
+  StarIcon, 
+  HeartIcon, 
+  XMarkIcon, 
+  UserIcon, 
+  BuildingStorefrontIcon, 
+  MagnifyingGlassIcon, 
+  XCircleIcon,
+  Bars3Icon
+} from "react-native-heroicons/outline"
+import { HeartIcon as HeartSolid } from "react-native-heroicons/solid"
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps"
 import { useLocation } from "../../hooks/useLocation"
 import { useAuth } from "../../context/AuthContext"
@@ -329,13 +340,13 @@ const ListScreen = () => {
 
         <View style={styles.sellerMetaRow}>
           <View style={styles.distanceContainer}>
-            <Ionicons name="location" size={14} color={theme.colors.placeholder} />
+            <MapPinIcon size={14} color={theme.colors.placeholder} />
             <Text style={styles.distanceText}>{formatDistance(item.distance)}</Text>
           </View>
 
           {item.rating && (
             <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color="#FFD700" />
+              <StarIcon size={14} color="#FFD700" />
               <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
             </View>
           )}
@@ -358,8 +369,7 @@ const ListScreen = () => {
           onPress={() => toggleLike(item.seller_id)}
           accessibilityLabel={`${likedSellers.has(item.seller_id) ? "Unlike" : "Like"} ${item.name}`}
         >
-          <Ionicons
-            name={likedSellers.has(item.seller_id) ? "heart" : "heart-outline"}
+          <HeartIcon
             size={24}
             color={likedSellers.has(item.seller_id) ? theme.colors.error : theme.colors.text}
           />
@@ -383,7 +393,7 @@ const ListScreen = () => {
     if (!currentLocation) {
       return (
         <View style={styles.noLocationContainer}>
-          <Ionicons name="location-outline" size={50} color={theme.colors.disabled} />
+          <MapPinIcon size={50} color={theme.colors.disabled} />
           <Text style={styles.noLocationText}>Location Required</Text>
           <Text style={styles.noLocationSubtext}>Enable location to see nearby vendors on the map</Text>
           <TouchableOpacity style={styles.enableLocationButton} onPress={handleLocationRequest}>
@@ -439,7 +449,7 @@ const ListScreen = () => {
               style={styles.closePreviewButton}
               onPress={() => setSelectedSeller(null)}
             >
-              <Ionicons name="close" size={20} color={theme.colors.text} />
+              <XMarkIcon size={20} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
         )}
@@ -460,7 +470,7 @@ const ListScreen = () => {
             title="You are here"
           >
             <View style={styles.buyerMarker}>
-              <Ionicons name="person" size={16} color="#FFFFFF" />
+              <UserIcon size={16} color="#FFFFFF" />
             </View>
           </Marker>
 
@@ -492,7 +502,7 @@ const ListScreen = () => {
                 styles.sellerMarker, 
                 seller.is_open ? styles.sellerMarkerOpen : styles.sellerMarkerClosed
               ]}>
-                <Ionicons name="storefront" size={16} color="#FFFFFF" />
+                <BuildingStorefrontIcon size={16} color="#FFFFFF" />
               </View>
             </Marker>
           ))}
@@ -503,7 +513,7 @@ const ListScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="storefront-outline" size={50} color={theme.colors.disabled} />
+      <BuildingStorefrontIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>No vendors nearby</Text>
       <Text style={styles.emptySubtext}>
         {searchQuery ? "Try adjusting your search" : `No vendors found within ${SEARCH_RADIUS}m`}
@@ -546,7 +556,7 @@ const ListScreen = () => {
           <Text style={styles.title}>Nearby Vendors</Text>
         </View>
         <View style={styles.noLocationContainer}>
-          <Ionicons name="location-outline" size={50} color={theme.colors.disabled} />
+          <MapPinIcon size={50} color={theme.colors.disabled} />
           <Text style={styles.noLocationText}>Location Required</Text>
           <Text style={styles.noLocationSubtext}>
             We need your location to show nearby vendors
@@ -581,7 +591,7 @@ const ListScreen = () => {
         {viewMode === 'list' && (
           <>
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
+              <MagnifyingGlassIcon size={20} color={theme.colors.placeholder} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search vendors"
@@ -591,7 +601,7 @@ const ListScreen = () => {
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => handleSearch("")} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={20} color={theme.colors.placeholder} />
+                  <XCircleIcon size={20} color={theme.colors.placeholder} />
                 </TouchableOpacity>
               )}
             </View>
@@ -672,8 +682,7 @@ const ListScreen = () => {
         onPress={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
         accessibilityLabel={`Switch to ${viewMode === 'list' ? 'map' : 'list'} view`}
       >
-        <Ionicons 
-          name={viewMode === 'list' ? 'map' : 'list'} 
+        <Bars3Icon 
           size={24} 
           color="#FFFFFF" 
         />

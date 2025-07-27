@@ -18,7 +18,14 @@ import {
 } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  PhoneIcon, 
+  MapIcon, 
+  MapPinIcon, 
+  CheckCircleIcon, 
+  XCircleIcon, 
+  ReceiptRefundIcon 
+} from "react-native-heroicons/outline"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
 
@@ -383,7 +390,7 @@ const OrdersScreen = () => {
             onPress={() => handleCallBuyer(item.buyer_phone, item.buyer_name)}
             accessibilityLabel={`Call ${item.buyer_name}`}
           >
-            <Ionicons name="call" size={18} color={theme.colors.primary} />
+            <PhoneIcon size={18} color={theme.colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -391,7 +398,7 @@ const OrdersScreen = () => {
             onPress={() => handleNavigateToBuyer(item.buyer_address, item.buyer_name)}
             accessibilityLabel={`Navigate to ${item.buyer_name}`}
           >
-            <Ionicons name="navigate" size={18} color={theme.colors.primary} />
+            <MapIcon size={18} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -402,7 +409,7 @@ const OrdersScreen = () => {
 
       {item.buyer_address && (
         <View style={styles.addressContainer}>
-          <Ionicons name="location" size={16} color={theme.colors.placeholder} />
+          <MapPinIcon size={16} color={theme.colors.placeholder} />
           <Text style={styles.addressText}>{item.buyer_address}</Text>
         </View>
       )}
@@ -471,7 +478,7 @@ const OrdersScreen = () => {
             onPress={() => handleCallBuyer(item.buyer_phone, item.buyer_name)}
             accessibilityLabel={`Call ${item.buyer_name}`}
           >
-            <Ionicons name="call" size={18} color={theme.colors.primary} />
+            <PhoneIcon size={18} color={theme.colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -479,7 +486,7 @@ const OrdersScreen = () => {
             onPress={() => handleNavigateToBuyer(item.buyer_address, item.buyer_name)}
             accessibilityLabel={`Navigate to ${item.buyer_name}`}
           >
-            <Ionicons name="navigate" size={18} color={theme.colors.primary} />
+            <MapIcon size={18} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -490,7 +497,7 @@ const OrdersScreen = () => {
 
       {item.buyer_address && (
         <View style={styles.addressContainer}>
-          <Ionicons name="location" size={16} color={theme.colors.placeholder} />
+          <MapPinIcon size={16} color={theme.colors.placeholder} />
           <Text style={styles.addressText}>{item.buyer_address}</Text>
         </View>
       )}
@@ -506,7 +513,7 @@ const OrdersScreen = () => {
         <Text style={styles.orderTotal}>Total: {formatPrice(item.total_amount)}</Text>
 
         <View style={styles.statusBadge}>
-          <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+          <CheckCircleIcon size={16} color={theme.colors.primary} />
           <Text style={[styles.statusText, { color: theme.colors.primary }]}>Completed</Text>
         </View>
       </View>
@@ -536,7 +543,7 @@ const OrdersScreen = () => {
             onPress={() => handleCallBuyer(item.buyer_phone, item.buyer_name)}
             accessibilityLabel={`Call ${item.buyer_name}`}
           >
-            <Ionicons name="call" size={18} color={theme.colors.primary} />
+            <PhoneIcon size={18} color={theme.colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -544,7 +551,7 @@ const OrdersScreen = () => {
             onPress={() => handleNavigateToBuyer(item.buyer_address, item.buyer_name)}
             accessibilityLabel={`Navigate to ${item.buyer_name}`}
           >
-            <Ionicons name="navigate" size={18} color={theme.colors.primary} />
+            <MapIcon size={18} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -555,7 +562,7 @@ const OrdersScreen = () => {
 
       {item.buyer_address && (
         <View style={styles.addressContainer}>
-          <Ionicons name="location" size={16} color={theme.colors.placeholder} />
+          <MapPinIcon size={16} color={theme.colors.placeholder} />
           <Text style={styles.addressText}>{item.buyer_address}</Text>
         </View>
       )}
@@ -571,7 +578,7 @@ const OrdersScreen = () => {
         <Text style={styles.orderTotal}>Total: {formatPrice(item.total_amount)}</Text>
 
         <View style={styles.statusBadge}>
-          <Ionicons name="close-circle" size={16} color={theme.colors.error} />
+          <XCircleIcon size={16} color={theme.colors.error} />
           <Text style={[styles.statusText, { color: theme.colors.error }]}>Cancelled</Text>
         </View>
       </View>
@@ -580,7 +587,7 @@ const OrdersScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="receipt" size={50} color={theme.colors.disabled} />
+      <ReceiptRefundIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>No orders yet</Text>
       <Text style={styles.emptySubtext}>Orders will appear here!</Text>
     </View>

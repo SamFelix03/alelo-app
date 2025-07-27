@@ -16,7 +16,7 @@ import {
 } from "react-native"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { ShoppingCartIcon, MinusIcon, PlusIcon, TrashIcon } from "react-native-heroicons/outline"
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../context/AuthContext"
 
@@ -322,7 +322,7 @@ const CartScreen = () => {
           onPress={() => updateCartItemQuantity(item.cart_item_id, sellerId, item.quantity - 1)}
           accessibilityLabel={`Decrease ${item.product_name} quantity`}
         >
-          <Ionicons name="remove" size={20} color={theme.colors.text} />
+          <MinusIcon size={20} color={theme.colors.text} />
         </TouchableOpacity>
 
         <Text style={styles.quantityText}>{item.quantity}</Text>
@@ -332,7 +332,7 @@ const CartScreen = () => {
           onPress={() => updateCartItemQuantity(item.cart_item_id, sellerId, item.quantity + 1)}
           accessibilityLabel={`Increase ${item.product_name} quantity`}
         >
-          <Ionicons name="add" size={20} color={theme.colors.text} />
+          <PlusIcon size={20} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -341,7 +341,7 @@ const CartScreen = () => {
         onPress={() => removeCartItem(item.cart_item_id, sellerId)}
         accessibilityLabel={`Remove ${item.product_name} from cart`}
       >
-        <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
+        <TrashIcon size={20} color={theme.colors.error} />
       </TouchableOpacity>
     </View>
   )
@@ -405,7 +405,7 @@ const CartScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="cart-outline" size={80} color={theme.colors.disabled} />
+      <ShoppingCartIcon size={80} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>Your cart is empty</Text>
       <Text style={styles.emptySubtext}>
         Browse products and add them to your cart to get started

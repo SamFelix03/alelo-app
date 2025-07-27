@@ -16,7 +16,15 @@ import {
 } from "react-native"
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { 
+  ChevronRightIcon, 
+  BuildingStorefrontIcon, 
+  ArrowLeftIcon, 
+  HeartIcon, 
+  MapPinIcon, 
+  StarIcon 
+} from "react-native-heroicons/outline"
+import { HeartIcon as HeartSolid } from "react-native-heroicons/solid"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "../../lib/supabase"
 
@@ -244,13 +252,13 @@ const SellerProfile = () => {
         )}
       </View>
 
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.placeholder} />
+      <ChevronRightIcon size={20} color={theme.colors.placeholder} />
     </TouchableOpacity>
   )
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="storefront-outline" size={50} color={theme.colors.disabled} />
+      <BuildingStorefrontIcon size={50} color={theme.colors.disabled} />
       <Text style={styles.emptyText}>No products available</Text>
       <Text style={styles.emptySubtext}>
         This vendor doesn't have any products listed at the moment
@@ -269,7 +277,7 @@ const SellerProfile = () => {
               onPress={() => navigation.goBack()}
               accessibilityLabel="Back button"
             >
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              <ArrowLeftIcon size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -277,8 +285,7 @@ const SellerProfile = () => {
               onPress={toggleLike}
               accessibilityLabel={`${isLiked ? "Unlike" : "Like"} seller`}
             >
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
+              <HeartIcon
                 size={24}
                 color={isLiked ? theme.colors.error : "#FFFFFF"}
               />
@@ -299,7 +306,7 @@ const SellerProfile = () => {
               
               <View style={styles.sellerMeta}>
                 <View style={styles.distanceContainer}>
-                  <Ionicons name="location" size={16} color="rgba(255, 255, 255, 0.9)" />
+                  <MapPinIcon size={16} color="rgba(255, 255, 255, 0.9)" />
                   <Text style={styles.distanceText}>{formatDistance(seller.distance)}</Text>
                 </View>
               </View>
@@ -329,8 +336,7 @@ const SellerProfile = () => {
               onPress={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
               accessibilityLabel={`Switch to ${viewMode === "grid" ? "list" : "grid"} view`}
             >
-              <Ionicons 
-                name={viewMode === "grid" ? "list" : "grid"} 
+              <StarIcon 
                 size={20} 
                 color={theme.colors.text} 
               />

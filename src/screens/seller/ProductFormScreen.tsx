@@ -13,7 +13,10 @@ import {
   Image,
 } from 'react-native'
 import { useNavigation, useRoute } from '@react-navigation/native'
-import { Ionicons } from '@expo/vector-icons'
+import { 
+  CameraIcon, 
+  ChevronDownIcon 
+} from "react-native-heroicons/outline"
 import { theme, spacing, fontSize } from '../../theme'
 import { supabase } from '../../lib/supabase'
 import * as ImagePicker from 'expo-image-picker'
@@ -158,7 +161,7 @@ const ProductFormScreen = () => {
               <Image source={{ uri: imageUrl }} style={styles.imagePreview} />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <Ionicons name="camera" size={32} color={theme.colors.placeholder} />
+                <CameraIcon size={32} color={theme.colors.placeholder} />
                 <Text style={styles.imagePlaceholderText}>Add Image</Text>
               </View>
             )}
@@ -214,7 +217,7 @@ const ProductFormScreen = () => {
                 }}
               >
                 <Text style={styles.pickerButtonText}>{priceUnit}</Text>
-                <Ionicons name="chevron-down" size={20} color={theme.colors.text} />
+                <ChevronDownIcon size={20} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
           </View>
@@ -234,7 +237,7 @@ const ProductFormScreen = () => {
               <Text style={styles.pickerButtonText}>
                 {productType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
               </Text>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.text} />
+              <ChevronDownIcon size={20} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
         </View>

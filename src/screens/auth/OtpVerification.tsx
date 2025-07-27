@@ -16,7 +16,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { theme, spacing, fontSize } from "../../theme"
-import { Ionicons } from "@expo/vector-icons"
+import { ArrowLeftIcon } from "react-native-heroicons/outline"
 import { supabase } from "../../lib/supabase"
 import { storeUserData } from "../../lib/auth"
 import { useAuth } from "../../context/AuthContext"
@@ -216,7 +216,7 @@ const OtpVerification = () => {
           onPress={() => navigation.goBack()}
           accessibilityLabel="Back button"
         >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          <ArrowLeftIcon size={24} color={theme.colors.text} />
         </TouchableOpacity>
 
         {showRoleSelection ? (
