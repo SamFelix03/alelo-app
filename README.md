@@ -4,6 +4,8 @@ Alelo is a mobile app that connects street vendors with local customers in real-
 - **Buyers**: Find and purchase from local vendors
 - **Sellers**: Showcase and sell products to nearby customers
 
+Demo video - [View Here](https://www.canva.com/design/DAHBNthgWJE/7mlLRePlnF2ZbNaVImIq5A/watch?utm_content=DAHBNthgWJE&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h4932c81442)
+
 ## Setup
 
 1. Make sure you have Node.js and npm installed
